@@ -196,9 +196,10 @@ Only one tool is registered: `run_shell_command`. Its JSON schema is hardcoded i
 
 ```go
 ConfigFile {
-    Active   string             // name of currently active profile
+    Active   string                // name of currently active profile
     Profiles map[string]Profile
-    Allowed  []string           // command names auto-executed without prompt
+    Allowed  map[string]TrustLevel // command names with trust levels ("simple" or "all")
+    Yolo     bool                  // global YOLO mode (bypass all prompts)
 }
 ```
 
@@ -277,6 +278,7 @@ sessionFile {
     Profile  string
     Updated  time.Time
     Messages []chatMessage  // no system message; rebuilt fresh each run
+    Yolo     *bool          // session YOLO mode
 }
 ```
 

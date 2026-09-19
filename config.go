@@ -29,12 +29,25 @@ type Profile struct {
 	Created        string `json:"created,omitempty"`
 }
 
-// ConfigFile — весь файл конфига: набор профилей, какой активен и список
-// команд, которые пользователь разрешил выполнять без вопросов.
+// TrustLevel задаёт уровень доверия к выполнению команды без подтверждения:
+// - TrustNone: не разрешена, всегда запрашивать
+// - TrustSimple: разрешены простые команды (без спецсимволов шелла)
+// - TrustAll: разрешены любые команды, включая конвейеры и перенаправления
+type TrustLevel string
+
+const (
+	TrustNone   TrustLevel = ""
+	TrustSimple TrustLevel = "simple"
+	TrustAll    TrustLevel = "all"
+)
+
+// ConfigFile — весь файл конфига: набор профилей, какой активен, список
+// команд с их уровнями доверия и глобальный флаг YOLO.
 type ConfigFile struct {
-	Active   string             `json:"active"`
-	Profiles map[string]Profile `json:"profiles"`
-	Allowed  []string           `json:"allowed_commands,omitempty"`
+	Active   string                `json:"active"`
+	Profiles map[string]Profile    `json:"profiles"`
+	Allowed  map[string]TrustLevel `json:"allowed_commands,omitempty"`
+	Yolo     bool                  `json:"yolo,omitempty"`
 }
 
 // Путь фиксирован явно (не os.UserConfigDir()) — на macOS это дало бы
@@ -69,8 +82,39 @@ func normalizeBaseURL(u string) string {
 	return u
 }
 
+func (cf *ConfigFile) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Active          string             `json:"active"`
+		Profiles        map[string]Profile `json:"profiles"`
+		AllowedCommands json.RawMessage    `json:"allowed_commands"`
+		Yolo            bool               `json:"yolo"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	cf.Active = raw.Active
+	cf.Profiles = raw.Profiles
+	cf.Yolo = raw.Yolo
+	cf.Allowed = make(map[string]TrustLevel)
+
+	if len(raw.AllowedCommands) > 0 {
+		var m map[string]TrustLevel
+		if err := json.Unmarshal(raw.AllowedCommands, &m); err == nil {
+			cf.Allowed = m
+		} else {
+			var s []string
+			if err := json.Unmarshal(raw.AllowedCommands, &s); err == nil {
+				for _, cmd := range s {
+					cf.Allowed[cmd] = TrustSimple
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func loadConfigFile() (ConfigFile, error) {
-	cf := ConfigFile{Profiles: map[string]Profile{}}
+	cf := ConfigFile{Profiles: map[string]Profile{}, Allowed: make(map[string]TrustLevel)}
 	path, err := configPath()
 	if err != nil {
 		return cf, err
@@ -87,6 +131,9 @@ func loadConfigFile() (ConfigFile, error) {
 	}
 	if cf.Profiles == nil {
 		cf.Profiles = map[string]Profile{}
+	}
+	if cf.Allowed == nil {
+		cf.Allowed = make(map[string]TrustLevel)
 	}
 	// Миграция со старого формата с единственной моделью.
 	for name, p := range cf.Profiles {
@@ -215,29 +262,34 @@ func maskKey(key string) string {
 
 // --- список разрешённых команд ---
 
-func (cf *ConfigFile) isAllowed(name string) bool {
-	for _, a := range cf.Allowed {
-		if a == name {
-			return true
-		}
+func (cf *ConfigFile) trustLevel(name string) TrustLevel {
+	if cf.Allowed == nil {
+		return TrustNone
 	}
-	return false
+	return cf.Allowed[name]
 }
 
-func (cf *ConfigFile) allow(name string) {
-	if name == "" || cf.isAllowed(name) {
+func (cf *ConfigFile) isAllowed(name string) bool {
+	return cf.trustLevel(name) != TrustNone
+}
+
+func (cf *ConfigFile) allow(name string, level TrustLevel) {
+	if name == "" {
 		return
 	}
-	cf.Allowed = append(cf.Allowed, name)
-	sort.Strings(cf.Allowed)
+	if cf.Allowed == nil {
+		cf.Allowed = make(map[string]TrustLevel)
+	}
+	cf.Allowed[name] = level
 }
 
 func (cf *ConfigFile) disallow(name string) bool {
-	for i, a := range cf.Allowed {
-		if a == name {
-			cf.Allowed = append(cf.Allowed[:i], cf.Allowed[i+1:]...)
-			return true
-		}
+	if cf.Allowed == nil {
+		return false
+	}
+	if _, ok := cf.Allowed[name]; ok {
+		delete(cf.Allowed, name)
+		return true
 	}
 	return false
 }

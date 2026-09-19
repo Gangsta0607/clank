@@ -31,29 +31,38 @@ func cmdAsk(args []string) int {
 		resume      bool
 		rest        []string
 		literal     bool
+		yoloFlag    *bool
 	)
 	for _, a := range args {
 		if literal {
 			rest = append(rest, a)
 			continue
 		}
-		switch a {
-		case "--":
+		switch {
+		case a == "--":
 			literal = true
-		case "-c", "--context":
+		case a == "-c" || a == "--context":
 			wantContext = true
-		case "-r", "--resume":
+		case a == "-r" || a == "--resume":
 			resume = true
-		case "-v", "--verbose":
+		case a == "-v" || a == "--verbose":
 			verboseLevel = vVerbose
-		case "-q", "--quiet":
+		case a == "-q" || a == "--quiet":
 			verboseLevel = vQuiet
-		case "-h", "--help":
+		case a == "-h" || a == "--help":
 			usage()
 			return exitOK
+		case a == "--yolo" || a == "--yolo=on" || a == "--yolo=true":
+			v := true
+			yoloFlag = &v
+		case a == "--yolo=off" || a == "--yolo=false":
+			v := false
+			yoloFlag = &v
 		default:
-			// Раньше неизвестный флаг молча уезжал в текст вопроса, и
-			// опечатка в `--resmue` никак себя не проявляла.
+			if strings.HasPrefix(a, "--yolo=") {
+				fail("неверное значение флага --yolo: %s (ожидается on или off)", a)
+				return exitConfig
+			}
 			if strings.HasPrefix(a, "-") && len(a) > 1 {
 				fail("неизвестный флаг: %s (если это часть вопроса — поставь перед ним --)", a)
 				return exitConfig
@@ -102,9 +111,20 @@ func cmdAsk(args []string) int {
 		userContent = fmt.Sprintf("Контекст:\n%s\n\nВопрос: %s", context, question)
 	}
 
-	var history []chatMessage
+	var (
+		history     []chatMessage
+		sessionYolo *bool
+	)
 	if resume {
-		history = loadSession(profileName)
+		history, sessionYolo = loadSession(profileName)
+	}
+
+	effectiveYolo := cf.Yolo
+	if sessionYolo != nil {
+		effectiveYolo = *sessionYolo
+	}
+	if yoloFlag != nil {
+		effectiveYolo = *yoloFlag
 	}
 
 	sysMsg := chatMessage{Role: "system", Content: buildSystemPrompt(profile.UseTools)}
@@ -127,7 +147,7 @@ func cmdAsk(args []string) int {
 	// упавшая на пятом шаге сеть уносит с собой журнал уже выполненных
 	// команд, и -r восстанавливает состояние «до начала».
 	finish := func(code int) int {
-		if err := saveSession(profileName, turnMessages); err != nil {
+		if err := saveSession(profileName, turnMessages, &effectiveYolo); err != nil {
 			warn("не смог сохранить сессию: %v", err)
 		}
 		return code
@@ -163,7 +183,7 @@ loop:
 		}
 
 		for _, tc := range res.msg.ToolCalls {
-			toolMsg, verdict := runToolCall(&cf, profile, tc)
+			toolMsg, verdict := runToolCall(&cf, profile, tc, effectiveYolo)
 			messages = append(messages, toolMsg)
 			turnMessages = append(turnMessages, toolMsg)
 
@@ -219,7 +239,7 @@ const (
 // runToolCall проверяет запрос модели и, если пользователь согласен,
 // выполняет команду. Возвращает сообщение с ролью tool — то, что уйдёт
 // обратно модели.
-func runToolCall(cf *ConfigFile, p Profile, tc toolCall) (chatMessage, toolVerdict) {
+func runToolCall(cf *ConfigFile, p Profile, tc toolCall, yolo bool) (chatMessage, toolVerdict) {
 	mk := func(content string) chatMessage {
 		return chatMessage{Role: "tool", ToolCallID: tc.ID, Content: content}
 	}
@@ -252,20 +272,32 @@ func runToolCall(cf *ConfigFile, p Profile, tc toolCall) (chatMessage, toolVerdi
 
 	name := commandName(cmdStr)
 	simple := isSimpleCommand(cmdStr)
-	knownButComplex := !simple && cf.isAllowed(name)
+	trust := cf.trustLevel(name)
 
-	if simple && cf.isAllowed(name) {
-		info("выполняю без вопроса (%s в списке разрешённых): %s", name, sanitizeForDisplay(cmdStr))
+	if yolo {
+		info("выполняю без вопроса (режим YOLO): %s", sanitizeForDisplay(cmdStr))
+	} else if trust == TrustAll {
+		info("выполняю без вопроса (%s разрешена всегда): %s", name, sanitizeForDisplay(cmdStr))
+	} else if trust == TrustSimple && simple {
+		info("выполняю без вопроса (%s разрешена для простых команд): %s", name, sanitizeForDisplay(cmdStr))
 	} else {
-		switch confirmCommand(cmdStr, name, knownButComplex) {
+		switch confirmCommand(cmdStr, name, trust) {
 		case ansNo:
 			return mk("пользователь отказался выполнять эту команду"), verdictDeclined
 		case ansAlways:
-			cf.allow(name)
+			level := TrustSimple
+			if !simple {
+				level = TrustAll
+			}
+			cf.allow(name, level)
 			if err := saveConfigFile(*cf); err != nil {
 				warn("не смог сохранить список разрешённых: %v", err)
 			} else {
-				info("%s добавлена в разрешённые (убрать: clank config allow-rm %s)", name, name)
+				if level == TrustAll {
+					info("%s теперь разрешена всегда, включая сложные команды (убрать: clank config allow-rm %s)", name, name)
+				} else {
+					info("%s добавлена в разрешённые для простых команд (убрать: clank config allow-rm %s)", name, name)
+				}
 			}
 		}
 	}

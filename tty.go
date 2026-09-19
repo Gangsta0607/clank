@@ -109,7 +109,7 @@ const (
 // же fd — управляющий терминал. Раньше команда уходила в stderr, а вопрос
 // в /dev/tty, и при `clank ... 2>log` пользователь видел только "выполнить?"
 // без текста команды, то есть подтверждал вслепую.
-func confirmCommand(cmdStr, name string, allowedKnown bool) answer {
+func confirmCommand(cmdStr, name string, level TrustLevel) answer {
 	f, rd, err := ttyIO()
 	if err != nil {
 		warn("нет управляющего терминала — подтвердить выполнение невозможно, отказываю")
@@ -117,12 +117,16 @@ func confirmCommand(cmdStr, name string, allowedKnown bool) answer {
 	}
 
 	fmt.Fprintf(f, "\nмодель хочет выполнить:\n%s\n", indentBlock(sanitizeForDisplay(cmdStr), "    "))
-	if allowedKnown {
-		fmt.Fprintf(f, "  (%s в списке разрешённых, но команда не простая — подтверди вручную)\n", name)
+	var prompt string
+	if level == TrustSimple {
+		fmt.Fprintf(f, "  («%s» разрешена только для простых команд, но эта команда содержит спецсимволы шелла — подтверди вручную)\n", name)
+		prompt = fmt.Sprintf("выполнить? [y/N/a] (a — разрешать «%s» всегда, включая сложные): ", name)
+	} else {
+		prompt = fmt.Sprintf("выполнить? [y/N/a] (a — разрешать «%s» всегда): ", name)
 	}
 
 	for {
-		fmt.Fprint(f, "выполнить? [y/N/a] (a — разрешать «"+name+"» всегда): ")
+		fmt.Fprint(f, prompt)
 		line, err := rd.ReadString('\n')
 		if err != nil {
 			fmt.Fprintln(f)

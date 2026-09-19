@@ -16,6 +16,7 @@ func usage() {
   clank -c <вопрос>                     форс чтения stdin, если автодетект не сработал
   clank -r <вопрос>                     продолжить сессию этого терминала (--resume)
   clank -c -r <вопрос>                  и пайп, и продолжение — работают вместе
+  clank --yolo=on|off <вопрос>          задать YOLO режим на сессию (on — без подтверждения команд)
   clank -v <вопрос>                     подробный лог хода работы (-q — наоборот, молча)
   clank -- <вопрос>                     всё дальше — текст вопроса, даже если похоже на флаг
 
@@ -37,6 +38,8 @@ func usage() {
   clank session show                    транскрипт сессии этого терминала
   clank session clear [--all]           стереть сессию (--all — во всех терминалах)
   clank session list                    все сессии на машине
+
+  clank yolo [on|off]                   включить/выключить глобальный режим YOLO (без подтверждения команд)
 
   clank version
 
@@ -67,6 +70,8 @@ func main() {
 		code = cmdConfig(rest)
 	case "session":
 		code = cmdSession(rest)
+	case "yolo":
+		code = cmdYolo(rest)
 	case "version", "--version":
 		fmt.Println("clank", version)
 		code = exitOK

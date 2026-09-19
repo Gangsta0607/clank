@@ -115,8 +115,16 @@ func cmdConfig(args []string) int {
 		fmt.Println("proxy:     ", valueOr(p.Proxy, "<не задан, берётся из env>"))
 		fmt.Println("use_tools: ", p.UseTools)
 		fmt.Println("таймаут:   ", p.execTimeout())
+		if cf.Yolo {
+			fmt.Println("yolo:       включён")
+		}
 		if len(cf.Allowed) > 0 {
-			fmt.Println("разрешены без подтверждения:", strings.Join(cf.Allowed, ", "))
+			var items []string
+			for k, lvl := range cf.Allowed {
+				items = append(items, fmt.Sprintf("%s (%s)", k, lvl))
+			}
+			sort.Strings(items)
+			fmt.Println("разрешены: ", strings.Join(items, ", "))
 		}
 		return exitOK
 
@@ -479,4 +487,43 @@ func printConfigUsage() {
   test-tools                 проверить и (с подтверждением) сохранить use_tools
   allow-rm <команда>         убрать команду из разрешённых без подтверждения
   allow-clear                очистить список разрешённых команд`)
+}
+
+func cmdYolo(args []string) int {
+	cf, err := loadConfigFile()
+	if err != nil {
+		fail("%v", err)
+		return exitConfig
+	}
+
+	if len(args) == 0 {
+		if cf.Yolo {
+			fmt.Println("режим YOLO: включён (команды выполняются без подтверждения)")
+		} else {
+			fmt.Println("режим YOLO: выключен (требуется подтверждение команд)")
+		}
+		return exitOK
+	}
+
+	switch strings.ToLower(args[0]) {
+	case "on", "1", "true", "enable":
+		cf.Yolo = true
+		if err := saveConfigFile(cf); err != nil {
+			fail("не смог сохранить: %v", err)
+			return exitConfig
+		}
+		fmt.Println("режим YOLO включён глобально")
+		return exitOK
+	case "off", "0", "false", "disable":
+		cf.Yolo = false
+		if err := saveConfigFile(cf); err != nil {
+			fail("не смог сохранить: %v", err)
+			return exitConfig
+		}
+		fmt.Println("режим YOLO выключен глобально")
+		return exitOK
+	default:
+		fail("неизвестный параметр: %s (используй clank yolo on|off)", args[0])
+		return exitConfig
+	}
 }

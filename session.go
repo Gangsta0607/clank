@@ -24,6 +24,7 @@ type sessionFile struct {
 	Profile  string        `json:"profile"`
 	Updated  time.Time     `json:"updated"`
 	Messages []chatMessage `json:"messages"`
+	Yolo     *bool         `json:"yolo,omitempty"`
 }
 
 const sessionMaxAge = 7 * 24 * time.Hour
@@ -60,26 +61,26 @@ func sessionPath() (string, error) {
 // loadSession возвращает историю текущего терминала. Про любую проблему
 // сообщает вслух: раньше повреждённый файл молча давал пустую историю, и
 // пользователь не понимал, почему модель забыла контекст.
-func loadSession(profile string) []chatMessage {
+func loadSession(profile string) ([]chatMessage, *bool) {
 	path, err := sessionPath()
 	if err != nil {
 		warn("не смог определить путь сессии: %v", err)
-		return nil
+		return nil, nil
 	}
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		info("сессии в этом терминале ещё нет — начинаю с чистого листа")
-		return nil
+		return nil, nil
 	}
 	if err != nil {
 		warn("не смог прочитать сессию (%s): %v — начинаю с чистого листа", path, err)
-		return nil
+		return nil, nil
 	}
 
 	var sf sessionFile
 	if err := json.Unmarshal(data, &sf); err != nil {
 		warn("файл сессии повреждён (%s): %v — начинаю с чистого листа", path, err)
-		return nil
+		return nil, nil
 	}
 
 	// В истории могут лежать tool_calls и role:"tool". Если новый профиль
@@ -88,14 +89,14 @@ func loadSession(profile string) []chatMessage {
 	if sf.Profile != "" && sf.Profile != profile {
 		info("сессия в этом терминале от профиля %s, сейчас активен %s — начинаю заново",
 			sf.Profile, profile)
-		return nil
+		return nil, nil
 	}
 
 	detail("сессия: %d сообщений, обновлена %s", len(sf.Messages), sf.Updated.Format("15:04:05"))
-	return sf.Messages
+	return sf.Messages, sf.Yolo
 }
 
-func saveSession(profile string, messages []chatMessage) error {
+func saveSession(profile string, messages []chatMessage, yolo *bool) error {
 	dir, err := sessionsDir()
 	if err != nil {
 		return err
@@ -111,6 +112,7 @@ func saveSession(profile string, messages []chatMessage) error {
 		Profile:  profile,
 		Updated:  time.Now(),
 		Messages: messages,
+		Yolo:     yolo,
 	}, "", "  ")
 	if err != nil {
 		return err
@@ -214,8 +216,16 @@ func sessionShow() int {
 		return exitOK
 	}
 
-	fmt.Printf("профиль: %s, сообщений: %d, обновлена: %s\n\n",
-		valueOr(sf.Profile, "?"), len(sf.Messages), sf.Updated.Format("2006-01-02 15:04:05"))
+	yoloStr := ""
+	if sf.Yolo != nil {
+		if *sf.Yolo {
+			yoloStr = ", yolo: on"
+		} else {
+			yoloStr = ", yolo: off"
+		}
+	}
+	fmt.Printf("профиль: %s, сообщений: %d, обновлена: %s%s\n\n",
+		valueOr(sf.Profile, "?"), len(sf.Messages), sf.Updated.Format("2006-01-02 15:04:05"), yoloStr)
 
 	for _, m := range sf.Messages {
 		switch m.Role {
