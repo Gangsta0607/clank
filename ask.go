@@ -12,7 +12,6 @@ type outcome int
 
 const (
 	outcomeAnswer outcome = iota
-	outcomeDeclined
 	outcomeInterrupted
 	outcomeEmpty
 )
@@ -187,12 +186,7 @@ loop:
 			messages = append(messages, toolMsg)
 			turnMessages = append(turnMessages, toolMsg)
 
-			switch verdict {
-			case verdictDeclined:
-				final = res.msg.Content
-				result = outcomeDeclined
-				break loop
-			case verdictInterrupted:
+			if verdict == verdictInterrupted {
 				final = res.msg.Content
 				result = outcomeInterrupted
 				break loop
@@ -206,12 +200,6 @@ loop:
 
 	code := exitOK
 	switch result {
-	case outcomeDeclined:
-		info("выполнение отменено")
-		if strings.TrimSpace(final) == "" {
-			final = "(команда не подтверждена, ход прерван)"
-		}
-		code = exitDeclined
 	case outcomeInterrupted:
 		info("прервано (Ctrl-C)")
 		if strings.TrimSpace(final) == "" {

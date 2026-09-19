@@ -67,8 +67,8 @@ The `default` branch means `clank "why is grub broken"` works without the `ask` 
 | `exitOK`      | 0     | success                                     |
 | `exitConfig`  | 1     | bad config / usage error                    |
 | `exitAPI`     | 2     | API / network failure                       |
-| `exitDeclined`| 3     | user declined tool execution or interrupted |
-| `exitNoAnswer`| 4     | model returned empty or hit iteration limit |
+| `exitDeclined`| 3     | user interrupted execution (Ctrl-C)         |
+| `exitNoAnswer`| 4     | model returned empty answer                 |
 
 ---
 
@@ -98,7 +98,7 @@ Flags parsed manually (no `flag` package):
      b. Append assistant message to messages + turnMessages
      c. If no tool_calls → break (final answer)
      d. For each tool_call → runToolCall()
-        - verdictDeclined / verdictInterrupted → break loop
+        - verdictInterrupted → break loop
      e. Append tool result message → continue
 9. Print final answer to stdout
 10. saveSession() on all exits (including error paths via finish())
@@ -128,7 +128,7 @@ Validates and executes one tool call:
 |---------------------|---------------------------------------------|
 | `verdictOK`         | executed, continue loop                     |
 | `verdictInvalid`    | bad tool request, model gets error message  |
-| `verdictDeclined`   | user said no, break loop                    |
+| `verdictDeclined`   | user said no, tool refusal message sent to model, continue loop |
 | `verdictInterrupted`| Ctrl-C during execution, break loop         |
 
 ---
