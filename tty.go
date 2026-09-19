@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -144,5 +145,80 @@ func confirmCommand(cmdStr, name string, level TrustLevel) answer {
 		default:
 			fmt.Fprintln(f, "не понял: y — выполнить, n — отказать, a — разрешать эту команду всегда")
 		}
+	}
+}
+
+// promptQuestion задаёт вопрос пользователю, отображает нумерованные
+// варианты (если переданы) и возвращает выбранный вариант либо кастомный ввод.
+func promptQuestion(q string, options []string, defVal string) (string, bool) {
+	f, rd, err := ttyIO()
+	if err != nil {
+		if defVal != "" {
+			info("нет управляющего терминала — выбираю значение по умолчанию: %s", defVal)
+			if len(options) > 0 {
+				if n, err := strconv.Atoi(defVal); err == nil && n >= 1 && n <= len(options) {
+					return options[n-1], true
+				}
+			}
+			return defVal, true
+		}
+		warn("нет управляющего терминала — ответить на вопрос невозможно")
+		return "", false
+	}
+
+	fmt.Fprintf(f, "\n[?] %s\n", sanitizeForDisplay(q))
+	for i, opt := range options {
+		fmt.Fprintf(f, "    %d) %s\n", i+1, sanitizeForDisplay(opt))
+	}
+
+	defDisplay := defVal
+	if len(options) > 0 && defVal != "" {
+		if n, err := strconv.Atoi(defVal); err == nil && n >= 1 && n <= len(options) {
+			defDisplay = fmt.Sprintf("%d (%s)", n, options[n-1])
+		}
+	}
+
+	var prompt string
+	switch {
+	case len(options) > 0 && defDisplay != "":
+		prompt = fmt.Sprintf("выбери 1-%d или напиши свой ответ [%s]: ", len(options), defDisplay)
+	case len(options) > 0:
+		prompt = fmt.Sprintf("выбери 1-%d или напиши свой ответ: ", len(options))
+	case defDisplay != "":
+		prompt = fmt.Sprintf("ответ [%s]: ", defDisplay)
+	default:
+		prompt = "ответ: "
+	}
+
+	for {
+		fmt.Fprint(f, prompt)
+		line, err := rd.ReadString('\n')
+		if err != nil {
+			fmt.Fprintln(f)
+			return "", false
+		}
+		text := strings.TrimSpace(line)
+		if text == "" {
+			if defVal != "" {
+				if len(options) > 0 {
+					if n, err := strconv.Atoi(defVal); err == nil && n >= 1 && n <= len(options) {
+						return options[n-1], true
+					}
+				}
+				return defVal, true
+			}
+			if len(options) == 0 {
+				return "", true
+			}
+			fmt.Fprintln(f, "введи номер варианта или свой ответ")
+			continue
+		}
+
+		if len(options) > 0 {
+			if n, err := strconv.Atoi(text); err == nil && n >= 1 && n <= len(options) {
+				return options[n-1], true
+			}
+		}
+		return text, true
 	}
 }

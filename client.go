@@ -44,7 +44,10 @@ type toolDef struct {
 	} `json:"function"`
 }
 
-const shellToolName = "run_shell_command"
+const (
+	shellToolName    = "run_shell_command"
+	questionToolName = "question"
+)
 
 func runShellCommandTool() toolDef {
 	var t toolDef
@@ -60,6 +63,35 @@ func runShellCommandTool() toolDef {
 			}
 		},
 		"required": ["command"]
+	}`)
+	return t
+}
+
+func questionTool() toolDef {
+	var t toolDef
+	t.Type = "function"
+	t.Function.Name = questionToolName
+	t.Function.Description = "Задать вопрос пользователю, предложить выбор из нескольких вариантов или запросить уточнение/ввод данных."
+	t.Function.Parameters = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"question": {
+				"type": "string",
+				"description": "Текст вопроса пользователю"
+			},
+			"options": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				},
+				"description": "Список вариантов для выбора пользователем (опционально)"
+			},
+			"default": {
+				"type": "string",
+				"description": "Вариант или значение по умолчанию при нажатии Enter (опционально)"
+			}
+		},
+		"required": ["question"]
 	}`)
 	return t
 }
@@ -333,7 +365,7 @@ func chatComplete(p Profile, model string, messages []chatMessage, useTools bool
 		Stream:   false,
 	}
 	if useTools {
-		reqStruct.Tools = []toolDef{runShellCommandTool()}
+		reqStruct.Tools = []toolDef{runShellCommandTool(), questionTool()}
 	}
 	reqBody, err := json.Marshal(reqStruct)
 	if err != nil {

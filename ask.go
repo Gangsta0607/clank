@@ -232,21 +232,59 @@ func runToolCall(cf *ConfigFile, p Profile, tc toolCall, yolo bool) (chatMessage
 		return chatMessage{Role: "tool", ToolCallID: tc.ID, Content: content}
 	}
 
-	// Инструмент объявлен ровно один. Раньше имя не проверялось вообще:
-	// что бы модель ни назвала, поле command уходило в sh -c.
-	if tc.Function.Name != shellToolName {
+	switch tc.Function.Name {
+	case shellToolName:
+		return runShellToolCall(cf, p, tc, yolo, mk)
+	case questionToolName, "input":
+		return runQuestionToolCall(tc, mk)
+	default:
 		warn("модель просит неизвестный инструмент %q — не выполняю",
 			sanitizeForDisplay(tc.Function.Name))
-		return mk(fmt.Sprintf("ошибка: инструмента %q не существует, доступен только %s",
-			tc.Function.Name, shellToolName)), verdictInvalid
+		return mk(fmt.Sprintf("ошибка: инструмента %q не существует, доступны: %s, %s",
+			tc.Function.Name, shellToolName, questionToolName)), verdictInvalid
+	}
+}
+
+func runQuestionToolCall(tc toolCall, mk func(string) chatMessage) (chatMessage, toolVerdict) {
+	var qArgs struct {
+		Question string   `json:"question"`
+		Prompt   string   `json:"prompt"`
+		Text     string   `json:"text"`
+		Options  []string `json:"options"`
+		Default  string   `json:"default"`
+	}
+	if err := json.Unmarshal([]byte(tc.Function.Arguments), &qArgs); err != nil {
+		warn("аргументы вопроса не разобрать: %v", err)
+		return mk(fmt.Sprintf("ошибка: аргументы вопроса должны быть JSON вида {\"question\": \"...\"}, разбор не удался: %v", err)), verdictInvalid
 	}
 
+	qText := strings.TrimSpace(qArgs.Question)
+	if qText == "" {
+		qText = strings.TrimSpace(qArgs.Prompt)
+	}
+	if qText == "" {
+		qText = strings.TrimSpace(qArgs.Text)
+	}
+	if qText == "" {
+		warn("модель прислала пустой вопрос")
+		return mk("ошибка: поле question пустое"), verdictInvalid
+	}
+
+	ans, ok := promptQuestion(qText, qArgs.Options, strings.TrimSpace(qArgs.Default))
+	if !ok {
+		if !haveTTY() && qArgs.Default == "" {
+			return mk("ошибка: нет управляющего терминала для ответа на вопрос"), verdictInvalid
+		}
+		return mk("пользователь отменил ввод (Ctrl-C / EOF)"), verdictInterrupted
+	}
+
+	return mk(ans), verdictOK
+}
+
+func runShellToolCall(cf *ConfigFile, p Profile, tc toolCall, yolo bool, mk func(string) chatMessage) (chatMessage, toolVerdict) {
 	var parsedArgs struct {
 		Command string `json:"command"`
 	}
-	// Ошибку разбора раньше выбрасывали (_ =), и после неудачи в шелл
-	// уходила пустая строка: sh -c "" отрабатывает с exit 0, и модель
-	// считала шаг успешно выполненным.
 	if err := json.Unmarshal([]byte(tc.Function.Arguments), &parsedArgs); err != nil {
 		warn("аргументы инструмента не разобрать: %v", err)
 		return mk(fmt.Sprintf("ошибка: аргументы должны быть JSON вида {\"command\": \"...\"}, разбор не удался: %v", err)), verdictInvalid

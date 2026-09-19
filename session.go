@@ -227,15 +227,39 @@ func sessionShow() int {
 	fmt.Printf("профиль: %s, сообщений: %d, обновлена: %s%s\n\n",
 		valueOr(sf.Profile, "?"), len(sf.Messages), sf.Updated.Format("2006-01-02 15:04:05"), yoloStr)
 
+	toolCallNames := make(map[string]string)
 	for _, m := range sf.Messages {
+		if m.Role == "assistant" {
+			for _, tc := range m.ToolCalls {
+				toolCallNames[tc.ID] = tc.Function.Name
+			}
+		}
+
 		switch m.Role {
 		case "tool":
-			fmt.Printf("[выполнено]\n%s\n\n", indentBlock(truncateRunes(m.Content, 2000), "    "))
+			prefix := "[выполнено]"
+			if toolCallNames[m.ToolCallID] == questionToolName {
+				prefix = "[ответ пользователя]"
+			}
+			fmt.Printf("%s\n%s\n\n", prefix, indentBlock(truncateRunes(m.Content, 2000), "    "))
 		case "assistant":
 			if len(m.ToolCalls) > 0 {
 				for _, tc := range m.ToolCalls {
-					fmt.Printf("[assistant просит выполнить] %s(%s)\n\n",
-						tc.Function.Name, sanitizeForDisplay(tc.Function.Arguments))
+					if tc.Function.Name == questionToolName {
+						var qArgs struct {
+							Question string   `json:"question"`
+							Options  []string `json:"options"`
+						}
+						_ = json.Unmarshal([]byte(tc.Function.Arguments), &qArgs)
+						fmt.Printf("[assistant спрашивает] %s\n", sanitizeForDisplay(qArgs.Question))
+						for i, opt := range qArgs.Options {
+							fmt.Printf("    %d) %s\n", i+1, sanitizeForDisplay(opt))
+						}
+						fmt.Println()
+					} else {
+						fmt.Printf("[assistant просит выполнить] %s(%s)\n\n",
+							tc.Function.Name, sanitizeForDisplay(tc.Function.Arguments))
+					}
 				}
 			}
 			if strings.TrimSpace(m.Content) != "" {

@@ -6,7 +6,7 @@
 
 ## What is clank
 
-A minimal CLI that wraps any OpenAI-compatible API. Core use case: pipe terminal output into it, ask a question, get an answer — without opening a browser. Secondary use case: let the model run real shell commands on the user's machine via a single registered tool (`run_shell_command`).
+A minimal CLI that wraps any OpenAI-compatible API. Core use case: pipe terminal output into it, ask a question, get an answer — without opening a browser. Secondary use case: let the model run real shell commands and ask interactive questions via registered tools (`run_shell_command`, `question`).
 
 No dependencies outside the Go stdlib. Single binary. Config in `~/.config/clank/`.
 
@@ -108,19 +108,24 @@ Flags parsed manually (no `flag` package):
 
 **`messages`** is what gets sent to the API: it includes the system message prepended, because the API requires it.
 
-### `runToolCall(cf, profile, tc toolCall) (chatMessage, toolVerdict)`
+### `runToolCall(cf *ConfigFile, p Profile, tc toolCall, yolo bool) (chatMessage, toolVerdict)`
 
-Validates and executes one tool call:
+Validates and routes the tool call:
 
-1. Check `tc.Function.Name == shellToolName` ("run_shell_command") — reject unknown tools
-2. JSON-unmarshal `tc.Function.Arguments` → `{command: string}`
-3. Reject empty command
-4. Check if command is in `cf.Allowed` AND `isSimpleCommand()` → auto-execute
-5. Otherwise call `confirmCommand()` → `ansYes / ansNo / ansAlways`
-   - `ansAlways` → `cf.allow(name)` + `saveConfigFile()`
+#### 1. `run_shell_command`
+1. JSON-unmarshal `tc.Function.Arguments` → `{command: string}`
+2. Reject empty command
+3. Check if command is in `cf.Allowed` AND `isSimpleCommand()` (or if YOLO mode is active) → auto-execute
+4. Otherwise call `confirmCommand()` → `ansYes / ansNo / ansAlways`
+   - `ansAlways` → `cf.allow(name, level)` + `saveConfigFile()`
    - `ansNo` → return `verdictDeclined`
-6. `execShell()` → `execResult`
-7. Return tool message with stdout/stderr/exit code
+5. `execShell()` → `execResult`
+6. Return tool message with stdout/stderr/exit code
+
+#### 2. `question`
+1. JSON-unmarshal `tc.Function.Arguments` → `{question: string, options: []string, default: string}`
+2. Call `promptQuestion(qText, options, default)` to interactively ask the user on `/dev/tty`
+3. Return the selected/custom option or default, with `verdictOK` (or `verdictInterrupted` on Ctrl-C/EOF)
 
 **Verdicts:**
 
@@ -182,7 +187,7 @@ Auth errors (`errAuth`), context overflow (`errContextOverflow`), and bad reques
 
 ### Tool definition
 
-Only one tool is registered: `run_shell_command`. Its JSON schema is hardcoded in `runShellCommandTool()`. The system prompt instructs the model on how to use it.
+Two tools are registered: `run_shell_command` and `question`. Their JSON schemas are hardcoded. The system prompt instructs the model on how to use them.
 
 ---
 
