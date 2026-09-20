@@ -2,11 +2,14 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -25,14 +28,56 @@ type toolCall struct {
 	} `json:"function"`
 }
 
+type imageURL struct {
+	URL string `json:"url"`
+}
+
+type contentPart struct {
+	Type     string    `json:"type"`
+	Text     string    `json:"text,omitempty"`
+	ImageURL *imageURL `json:"image_url,omitempty"`
+}
+
 // Content с omitempty: у assistant-сообщения с tool_calls текста нет, и
 // часть строгих OpenAI-совместимых серверов отвергает пустую строку там,
-// где ждёт отсутствующее поле или null.
+// где ждёт отсутствующее поле или null. Content может быть string или []contentPart.
 type chatMessage struct {
 	Role       string     `json:"role"`
-	Content    string     `json:"content,omitempty"`
+	Content    any        `json:"content,omitempty"`
 	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
+}
+
+func (m chatMessage) Text() string {
+	if s, ok := m.Content.(string); ok {
+		return s
+	}
+	if parts, ok := m.Content.([]contentPart); ok {
+		var sb strings.Builder
+		for _, p := range parts {
+			if p.Type == "text" {
+				sb.WriteString(p.Text)
+			}
+		}
+		return sb.String()
+	}
+	if parts, ok := m.Content.([]any); ok {
+		var sb strings.Builder
+		for _, p := range parts {
+			if pm, ok := p.(map[string]any); ok {
+				if pm["type"] == "text" {
+					if t, ok := pm["text"].(string); ok {
+						sb.WriteString(t)
+					}
+				}
+			}
+		}
+		return sb.String()
+	}
+	if m.Content != nil {
+		return fmt.Sprint(m.Content)
+	}
+	return ""
 }
 
 type toolDef struct {
@@ -45,8 +90,9 @@ type toolDef struct {
 }
 
 const (
-	shellToolName    = "run_shell_command"
-	questionToolName = "question"
+	shellToolName     = "run_shell_command"
+	questionToolName  = "question"
+	viewImageToolName = "view_image"
 )
 
 func runShellCommandTool() toolDef {
@@ -94,6 +140,51 @@ func questionTool() toolDef {
 		"required": ["question"]
 	}`)
 	return t
+}
+
+func viewImageTool() toolDef {
+	var t toolDef
+	t.Type = "function"
+	t.Function.Name = viewImageToolName
+	t.Function.Description = "Просмотреть содержимое локального графического файла (PNG, JPEG, WebP, GIF) для анализа изображения, распознавания текста (OCR) или проверки графики."
+	t.Function.Parameters = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"path": {
+				"type": "string",
+				"description": "Путь к файлу изображения (относительный или абсолютный)"
+			}
+		},
+		"required": ["path"]
+	}`)
+	return t
+}
+
+func encodeImageFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	if len(data) > 20<<20 {
+		return "", fmt.Errorf("файл слишком большой (>20MB)")
+	}
+	mime := http.DetectContentType(data)
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".png":
+		mime = "image/png"
+	case ".jpg", ".jpeg":
+		mime = "image/jpeg"
+	case ".webp":
+		mime = "image/webp"
+	case ".gif":
+		mime = "image/gif"
+	}
+	if !strings.HasPrefix(mime, "image/") {
+		return "", fmt.Errorf("файл %s не является поддерживаемым изображением (тип %s)", path, mime)
+	}
+	b64 := base64.StdEncoding.EncodeToString(data)
+	return fmt.Sprintf("data:%s;base64,%s", mime, b64), nil
 }
 
 type chatRequest struct {
@@ -368,7 +459,7 @@ func chatComplete(p Profile, model string, messages []chatMessage, useTools bool
 		Stream:   false,
 	}
 	if useTools {
-		reqStruct.Tools = []toolDef{runShellCommandTool(), questionTool()}
+		reqStruct.Tools = []toolDef{runShellCommandTool(), questionTool(), viewImageTool()}
 	}
 	if p.Reasoning != nil {
 		if *p.Reasoning {
@@ -565,7 +656,7 @@ func testToolSupport(p Profile, model string) (ok bool, detailText string, err e
 		tc := res.msg.ToolCalls[0]
 		return true, fmt.Sprintf("%s(%s)", tc.Function.Name, tc.Function.Arguments), nil
 	}
-	return false, res.msg.Content, nil
+	return false, res.msg.Text(), nil
 }
 
 type reasoningTestResult struct {
@@ -664,4 +755,23 @@ func testReasoningSupport(p Profile, model string) (reasoningTestResult, error) 
 	}
 
 	return res, nil
+}
+
+const testPNG32x32Base64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAJklEQVR4nO3NsQkAAAjAsP7/tF7hIASyp6ZbAoFAIBAIBAKB4EuwNof8LkGrxSIAAAAASUVORK5CYII="
+
+func testVisionSupport(p Profile, model string) (ok bool, detailText string, err error) {
+	dataURL := "data:image/png;base64," + testPNG32x32Base64
+	userMsg := chatMessage{
+		Role: "user",
+		Content: []contentPart{
+			{Type: "text", Text: "Какого цвета это изображение? Ответь кратко."},
+			{Type: "image_url", ImageURL: &imageURL{URL: dataURL}},
+		},
+	}
+	res, err := chatComplete(p, model, []chatMessage{userMsg}, false)
+	if err != nil {
+		return false, "", err
+	}
+	ans := strings.TrimSpace(res.msg.Text())
+	return true, ans, nil
 }

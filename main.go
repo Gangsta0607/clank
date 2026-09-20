@@ -16,6 +16,7 @@ func usage() {
   clank -c <вопрос>                     форс чтения stdin, если автодетект не сработал
   clank -r <вопрос>                     продолжить сессию этого терминала (--resume)
   clank -c -r <вопрос>                  и пайп, и продолжение — работают вместе
+  clank -i <файл> <вопрос>              прикрепить изображение (PNG, JPG, WebP, GIF) к вопросу
   clank --yolo=on|off <вопрос>          задать YOLO режим на сессию (on — без подтверждения команд)
   clank --reasoning=on|off <вопрос>     принудительно включить/выключить размышления модели
   clank -v <вопрос>                     подробный лог хода работы (-q — наоборот, молча)
@@ -35,6 +36,7 @@ func usage() {
   clank config set-url/set-key/set-model/set-proxy/set-tools/set-reasoning/set-exec-timeout <значение>
   clank config test-tools               проверить поддержку tool calls моделью
   clank config test-reasoning           проверить и откалибровать поддержку reasoning моделью
+  clank config test-vision              проверить поддержку изображений (vision) моделью
   clank config allow-rm/allow-clear     список команд, выполняемых без подтверждения
 
   clank session show                    транскрипт сессии этого терминала

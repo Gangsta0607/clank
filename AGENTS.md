@@ -6,7 +6,7 @@
 
 ## What is clank
 
-A minimal CLI that wraps any OpenAI-compatible API. Core use case: pipe terminal output into it, ask a question, get an answer — without opening a browser. Secondary use case: let the model run real shell commands and ask interactive questions via registered tools (`run_shell_command`, `question`).
+A minimal CLI that wraps any OpenAI-compatible API. Core use case: pipe terminal output into it, ask a question, get an answer — without opening a browser. Secondary use case: let the model run real shell commands and ask interactive questions via registered tools (`run_shell_command`, `question`, `view_image`).
 
 No dependencies outside the Go stdlib. Single binary. Config in `~/.config/clank/`.
 
@@ -132,6 +132,12 @@ Validates and routes the tool call:
 2. Call `promptQuestion(qText, options, default)` to interactively ask the user on `/dev/tty`
 3. Return the selected/custom option or default, with `verdictOK` (or `verdictInterrupted` on Ctrl-C/EOF)
 
+#### 3. `view_image`
+1. JSON-unmarshal `tc.Function.Arguments` → `{path: string}`
+2. Print `· смотрю <path>` to stderr
+3. Read file, encode to base64 data URI
+4. Return `toolMsg` confirming load and a follow-up `userMsg` containing the `image_url` payload for the model to see
+
 **Verdicts:**
 
 | Constant            | Meaning                                     |
@@ -194,7 +200,7 @@ Reasoning can be toggled via `clank config set-reasoning on|off` or `--reasoning
 
 ### Tool definition
 
-Two tools are registered: `run_shell_command` and `question`. Their JSON schemas are hardcoded. The system prompt instructs the model on how to use them.
+Three tools are registered: `run_shell_command`, `question`, and `view_image`. Their JSON schemas are hardcoded. The system prompt instructs the model on how to use them.
 
 ---
 

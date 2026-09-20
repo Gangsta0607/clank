@@ -233,6 +233,14 @@ func cmdConfig(args []string) int {
 		}
 		return cmdTestReasoning(&cf, name)
 
+	case "test-vision":
+		name, _, err := activeProfile(&cf)
+		if err != nil {
+			fail("%v", err)
+			return exitConfig
+		}
+		return cmdTestVision(&cf, name)
+
 	case "allow-rm":
 		if len(args) < 2 {
 			fail("нужно имя команды: clank config allow-rm <имя>")
@@ -591,6 +599,31 @@ func cmdTestReasoning(cf *ConfigFile, name string) int {
 	return exitOK
 }
 
+func cmdTestVision(cf *ConfigFile, name string) int {
+	p := cf.Profiles[name]
+	if err := p.validate(); err != nil {
+		fail("%v", err)
+		return exitConfig
+	}
+
+	model := p.Models[0]
+	fmt.Println("проверяю поддержку vision (изображений) на модели", model, "...")
+	sp := startSpinner("жду ответ")
+	ok, detailText, err := testVisionSupport(p, model)
+	sp.stopSpinner()
+	if err != nil {
+		fail("%v", err)
+		return exitAPI
+	}
+	if ok {
+		fmt.Println("модель успешно ответила на запрос с изображением:", sanitizeForDisplay(truncateRunes(detailText, 300)))
+		info("поддержка vision подтверждена")
+	} else {
+		fmt.Println("модель НЕ смогла обработать изображение")
+	}
+	return exitOK
+}
+
 func printConfigUsage() {
 	fmt.Fprintln(os.Stderr, `использование: clank config <команда>
   init                       быстрая настройка профиля "default"
@@ -608,6 +641,7 @@ func printConfigUsage() {
   set-exec-timeout <сек>     потолок на выполнение команды (0 — дефолт)
   test-tools                 проверить и (с подтверждением) сохранить use_tools
   test-reasoning             проверить и откалибровать поддержку reasoning
+  test-vision                проверить поддержку vision (изображений) моделью
   allow-rm <команда>         убрать команду из разрешённых без подтверждения
   allow-clear                очистить список разрешённых команд`)
 }

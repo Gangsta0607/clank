@@ -32,8 +32,10 @@ func cmdAsk(args []string) int {
 		literal     bool
 		yoloFlag    *bool
 		reasonFlag  *bool
+		imagePaths  []string
 	)
-	for _, a := range args {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		if literal {
 			rest = append(rest, a)
 			continue
@@ -52,6 +54,15 @@ func cmdAsk(args []string) int {
 		case a == "-h" || a == "--help":
 			usage()
 			return exitOK
+		case a == "-i" || a == "--image":
+			if i+1 >= len(args) {
+				fail("флагу %s нужен путь к файлу изображения", a)
+				return exitConfig
+			}
+			i++
+			imagePaths = append(imagePaths, args[i])
+		case strings.HasPrefix(a, "--image="):
+			imagePaths = append(imagePaths, strings.TrimPrefix(a, "--image="))
 		case a == "--yolo" || a == "--yolo=on" || a == "--yolo=true":
 			v := true
 			yoloFlag = &v
@@ -141,7 +152,27 @@ func cmdAsk(args []string) int {
 	}
 
 	sysMsg := chatMessage{Role: "system", Content: buildSystemPrompt(profile.UseTools)}
-	userMsg := chatMessage{Role: "user", Content: userContent}
+	var userMsg chatMessage
+	if len(imagePaths) > 0 {
+		parts := []contentPart{
+			{Type: "text", Text: userContent},
+		}
+		for _, imgPath := range imagePaths {
+			dataURL, err := encodeImageFile(imgPath)
+			if err != nil {
+				fail("%v", err)
+				return exitConfig
+			}
+			parts = append(parts, contentPart{
+				Type:     "image_url",
+				ImageURL: &imageURL{URL: dataURL},
+			})
+			detail("прикреплено изображение %s (%d байт data-uri)", imgPath, len(dataURL))
+		}
+		userMsg = chatMessage{Role: "user", Content: parts}
+	} else {
+		userMsg = chatMessage{Role: "user", Content: userContent}
+	}
 
 	messages := make([]chatMessage, 0, len(history)+2)
 	messages = append(messages, sysMsg)
@@ -188,7 +219,7 @@ loop:
 		finishReason = res.finishReason
 
 		if len(res.msg.ToolCalls) == 0 {
-			final = res.msg.Content
+			final = res.msg.Text()
 			if strings.TrimSpace(final) == "" {
 				result = outcomeEmpty
 			}
@@ -196,12 +227,16 @@ loop:
 		}
 
 		for _, tc := range res.msg.ToolCalls {
-			toolMsg, verdict := runToolCall(&cf, profile, tc, effectiveYolo)
+			toolMsg, followUp, verdict := runToolCall(&cf, profile, tc, effectiveYolo)
 			messages = append(messages, toolMsg)
 			turnMessages = append(turnMessages, toolMsg)
+			if followUp != nil {
+				messages = append(messages, *followUp)
+				turnMessages = append(turnMessages, *followUp)
+			}
 
 			if verdict == verdictInterrupted {
-				final = res.msg.Content
+				final = res.msg.Text()
 				result = outcomeInterrupted
 				break loop
 			}
@@ -241,22 +276,63 @@ const (
 // runToolCall проверяет запрос модели и, если пользователь согласен,
 // выполняет команду. Возвращает сообщение с ролью tool — то, что уйдёт
 // обратно модели.
-func runToolCall(cf *ConfigFile, p Profile, tc toolCall, yolo bool) (chatMessage, toolVerdict) {
+func runToolCall(cf *ConfigFile, p Profile, tc toolCall, yolo bool) (chatMessage, *chatMessage, toolVerdict) {
 	mk := func(content string) chatMessage {
 		return chatMessage{Role: "tool", ToolCallID: tc.ID, Content: content}
 	}
 
 	switch tc.Function.Name {
 	case shellToolName:
-		return runShellToolCall(cf, p, tc, yolo, mk)
+		msg, verd := runShellToolCall(cf, p, tc, yolo, mk)
+		return msg, nil, verd
 	case questionToolName, "input":
-		return runQuestionToolCall(tc, mk)
+		msg, verd := runQuestionToolCall(tc, mk)
+		return msg, nil, verd
+	case viewImageToolName:
+		return runViewImageToolCall(tc, mk)
 	default:
 		warn("модель просит неизвестный инструмент %q — не выполняю",
 			sanitizeForDisplay(tc.Function.Name))
-		return mk(fmt.Sprintf("ошибка: инструмента %q не существует, доступны: %s, %s",
-			tc.Function.Name, shellToolName, questionToolName)), verdictInvalid
+		return mk(fmt.Sprintf("ошибка: инструмента %q не существует, доступны: %s, %s, %s",
+			tc.Function.Name, shellToolName, questionToolName, viewImageToolName)), nil, verdictInvalid
 	}
+}
+
+func runViewImageToolCall(tc toolCall, mk func(string) chatMessage) (chatMessage, *chatMessage, toolVerdict) {
+	var parsedArgs struct {
+		Path string `json:"path"`
+		File string `json:"file"`
+	}
+	if err := json.Unmarshal([]byte(tc.Function.Arguments), &parsedArgs); err != nil {
+		warn("аргументы просмотра изображения не разобрать: %v", err)
+		return mk(fmt.Sprintf("ошибка: аргументы должны быть JSON вида {\"path\": \"...\"}, разбор не удался: %v", err)), nil, verdictInvalid
+	}
+
+	imgPath := strings.TrimSpace(parsedArgs.Path)
+	if imgPath == "" {
+		imgPath = strings.TrimSpace(parsedArgs.File)
+	}
+	if imgPath == "" {
+		warn("модель прислала пустой путь к изображению")
+		return mk("ошибка: поле path пустое"), nil, verdictInvalid
+	}
+
+	info("· смотрю %s", sanitizeForDisplay(imgPath))
+	dataURL, err := encodeImageFile(imgPath)
+	if err != nil {
+		warn("не удалось открыть изображение %s: %v", imgPath, err)
+		return mk(fmt.Sprintf("ошибка при чтении изображения %s: %v", imgPath, err)), nil, verdictInvalid
+	}
+
+	toolMsg := mk(fmt.Sprintf("Изображение %s успешно загружено.", imgPath))
+	followUp := &chatMessage{
+		Role: "user",
+		Content: []contentPart{
+			{Type: "text", Text: fmt.Sprintf("Содержимое изображения %s:", imgPath)},
+			{Type: "image_url", ImageURL: &imageURL{URL: dataURL}},
+		},
+	}
+	return toolMsg, followUp, verdictOK
 }
 
 func runQuestionToolCall(tc toolCall, mk func(string) chatMessage) (chatMessage, toolVerdict) {

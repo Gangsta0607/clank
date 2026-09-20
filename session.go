@@ -219,8 +219,10 @@ func sessionShow() int {
 			prefix := "[выполнено]"
 			if toolCallNames[m.ToolCallID] == questionToolName {
 				prefix = "[ответ пользователя]"
+			} else if toolCallNames[m.ToolCallID] == viewImageToolName {
+				prefix = "[изображение загружено]"
 			}
-			fmt.Printf("%s\n%s\n\n", prefix, indentBlock(truncateRunes(m.Content, 2000), "    "))
+			fmt.Printf("%s\n%s\n\n", prefix, indentBlock(truncateRunes(m.Text(), 2000), "    "))
 		case "assistant":
 			if len(m.ToolCalls) > 0 {
 				for _, tc := range m.ToolCalls {
@@ -235,17 +237,23 @@ func sessionShow() int {
 							fmt.Printf("    %d) %s\n", i+1, sanitizeForDisplay(opt))
 						}
 						fmt.Println()
+					} else if tc.Function.Name == viewImageToolName {
+						var imgArgs struct {
+							Path string `json:"path"`
+						}
+						_ = json.Unmarshal([]byte(tc.Function.Arguments), &imgArgs)
+						fmt.Printf("[assistant смотрит изображение] %s\n\n", sanitizeForDisplay(imgArgs.Path))
 					} else {
 						fmt.Printf("[assistant просит выполнить] %s(%s)\n\n",
 							tc.Function.Name, sanitizeForDisplay(tc.Function.Arguments))
 					}
 				}
 			}
-			if strings.TrimSpace(m.Content) != "" {
-				fmt.Printf("[assistant] %s\n\n", m.Content)
+			if strings.TrimSpace(m.Text()) != "" {
+				fmt.Printf("[assistant] %s\n\n", m.Text())
 			}
 		default:
-			fmt.Printf("[%s] %s\n\n", m.Role, m.Content)
+			fmt.Printf("[%s] %s\n\n", m.Role, m.Text())
 		}
 	}
 	return exitOK
