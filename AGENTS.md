@@ -39,6 +39,7 @@ All code is in package `main` (single package, flat directory). No subdirectorie
 | `configcmd.go`  | `clank config *` and `clank models` subcommands             |
 | `exec.go`       | Shell execution, output capping, command vetting            |
 | `exec_*.go`     | Platform-specific shell execution (Unix/Windows)            |
+| `lifecycle.go`  | `purge`, `uninstall`, and `nuke` commands                   |
 | `session.go`    | Per-TTY session persistence, GC                             |
 | `session_*.go`  | Platform-specific session identity (Unix/Windows)           |
 | `systemprompt.go` | Builds the system prompt dynamically                      |
@@ -48,6 +49,7 @@ All code is in package `main` (single package, flat directory). No subdirectorie
 | `tty.go`        | All interactive I/O (single reader), prompts                |
 | `tty_*.go`      | Platform-specific TTY handle (Unix/Windows)                 |
 | `ui.go`         | Logging levels, spinner, exit codes, string helpers         |
+| `update.go`     | Self-update via GitHub Releases with caching                |
 
 ---
 

@@ -192,7 +192,12 @@ func activeProfile(cf *ConfigFile) (string, Profile, error) {
 		warn("активный профиль %q не найден в конфиге", cf.Active)
 	}
 	if len(cf.Profiles) == 0 {
-		return "", Profile{}, fmt.Errorf("профилей нет — создай: clank config init")
+		if cf.Profiles == nil {
+			cf.Profiles = make(map[string]Profile)
+		}
+		cf.Profiles["default"] = Profile{}
+		cf.Active = "default"
+		return "default", cf.Profiles["default"], nil
 	}
 
 	name := newestProfileName(*cf)

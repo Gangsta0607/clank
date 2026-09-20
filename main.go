@@ -44,6 +44,10 @@ func usage() {
   clank session list                    все сессии на машине
 
   clank yolo [on|off]                   включить/выключить глобальный режим YOLO (без подтверждения команд)
+  clank update [-y]                     проверить и установить новую версию с GitHub
+  clank purge [-y]                      стереть все пользовательские данные (~/.config/clank/)
+  clank uninstall [-y]                  удалить исполняемый файл clank
+  clank nuke [-y]                       полностью удалить clank и все его данные
 
   clank version
 
@@ -76,6 +80,14 @@ func main() {
 		code = cmdSession(rest)
 	case "yolo":
 		code = cmdYolo(rest)
+	case "update":
+		code = cmdUpdate(rest)
+	case "purge":
+		code = cmdPurge(rest)
+	case "uninstall":
+		code = cmdUninstall(rest)
+	case "nuke":
+		code = cmdNuke(rest)
 	case "version", "--version":
 		fmt.Println("clank", version)
 		code = exitOK
