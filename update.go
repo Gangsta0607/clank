@@ -5,7 +5,10 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -101,7 +104,7 @@ func cmdUpdate(args []string) int {
 
 	fmt.Printf(M.UpdAvail, latestVer, currentVer)
 	if strings.TrimSpace(rel.Body) != "" {
-		fmt.Printf(M.UpdNotes, indentBlock(truncateRunes(rel.Body, 1000), "  "))
+		fmt.Printf(M.UpdNotes, indentBlock(truncateRunes(stripChecksumsSection(rel.Body), 1000), "  "))
 	}
 
 	if hasCache {
@@ -135,6 +138,17 @@ func cmdUpdate(args []string) int {
 		if err != nil {
 			fail(M.UpdDownErr, err)
 			return exitAPI
+		}
+
+		if err := verifyArchive(archiveData, assetName, rel); err != nil {
+			if errors.Is(err, errNoChecksums) {
+				warn(M.UpdNoSums)
+			} else {
+				fail("%v", err)
+				return exitConfig
+			}
+		} else {
+			detail(M.UpdSumOK, assetName)
 		}
 
 		newBinData, err = extractBinary(archiveData, isZip)
@@ -316,4 +330,74 @@ func applyUpdate(targetPath string, newBinary []byte) error {
 	}
 
 	return os.Rename(tmpPath, targetPath)
+}
+
+// errNoChecksums — в релизе нет checksums.txt, проверять не по чему.
+// Не фатально (старые релизы собирались без него): ставим с предупреждением.
+var errNoChecksums = errors.New("no checksums")
+
+// stripChecksumsSection вырезает из тела релиза сгенерированный блок
+// контрольных сумм (заголовок ## … + fenced-блок) — в `clank update`
+// показываем только человеческие заметки. Заголовок без fenced-блока
+// за наш не считаем и оставляем как есть.
+func stripChecksumsSection(body string) string {
+	lines := strings.Split(body, "\n")
+	var out []string
+	i := 0
+	for i < len(lines) {
+		t := strings.TrimSpace(lines[i])
+		if strings.HasPrefix(t, "## ") && (strings.Contains(t, "Контрольные суммы") ||
+			strings.Contains(strings.ToLower(t), "checksum") ||
+			strings.Contains(t, "SHA")) {
+			j := i + 1
+			for j < len(lines) && strings.TrimSpace(lines[j]) == "" {
+				j++
+			}
+			if j < len(lines) && strings.TrimSpace(lines[j]) == "```" {
+				k := j + 1
+				for k < len(lines) && strings.TrimSpace(lines[k]) != "```" {
+					k++
+				}
+				i = k + 1 // за закрывающим fence (или конец, если его нет)
+				continue
+			}
+		}
+		out = append(out, lines[i])
+		i++
+	}
+	return strings.TrimRight(strings.Join(out, "\n"), "\n")
+}
+
+// verifyArchive сверяет скачанный архив с checksums.txt из того же релиза.
+func verifyArchive(data []byte, assetName string, rel githubRelease) error {
+	var sumsURL string
+	for _, a := range rel.Assets {
+		if a.Name == "checksums.txt" {
+			sumsURL = a.BrowserDownloadURL
+			break
+		}
+	}
+	if sumsURL == "" {
+		return errNoChecksums
+	}
+	sumsData, err := downloadAsset(sumsURL)
+	if err != nil {
+		return errNoChecksums
+	}
+	want := ""
+	for _, line := range strings.Split(string(sumsData), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[1] == assetName {
+			want = fields[0]
+			break
+		}
+	}
+	if want == "" {
+		return errNoChecksums
+	}
+	sum := sha256.Sum256(data)
+	if got := hex.EncodeToString(sum[:]); got != want {
+		return fmt.Errorf(M.UpdSumBad, assetName, want, got)
+	}
+	return nil
 }

@@ -267,6 +267,9 @@ var RU = Msgs{
 	UpdNoAsset:  "не найден подходящий архив для платформы %s/%s в релизе %s",
 	UpdNoExeZip: "исполняемый файл clank.exe не найден внутри zip архива",
 	UpdNoExeTar: "исполняемый файл clank не найден внутри tar.gz архива",
+	UpdNoSums:   "в релизе нет checksums.txt — ставлю без проверки",
+	UpdSumBad:   "контрольная сумма архива %s не сошлась: ждали %s, посчитали %s",
+	UpdSumOK:    "контрольная сумма %s сошлась",
 
 	// systemprompt_unix.go
 	ShellApprox:  " (по $SHELL, не точно)",

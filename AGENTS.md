@@ -383,6 +383,21 @@ flags missing fields. Tool JSON schemas stay English (see above).
 
 ---
 
+## Release body & update verification
+
+- Release body = NOTES from the tag annotation + GitHub generated notes.
+  Checksums are NEVER in the body — they ride as the `checksums.txt` asset.
+- `release.yml` fetches the tag object explicitly before reading the
+  annotation (`for-each-ref ... %(contents:body)`); checkout alone doesn't
+  guarantee it — v1.6 shipped a checksums-only body because of this.
+- `clank update` strips any checksums block from the displayed notes
+  (`stripChecksumsSection`, covered by `update_test.go`) — old releases
+  still carry it in the body.
+- Downloads are verified against `checksums.txt` (`verifyArchive`, SHA-256).
+  Releases without it (≤v1.6) install with a warning.
+
+---
+
 ## TTY and interactive I/O (`tty.go`)
 
 **Single global `/dev/tty` reader** (`ttyOnce sync.Once`). This is non-negotiable: `bufio.Reader` buffers ahead; two readers on the same fd would lose data. All interactive prompts use `ttyIO()`.

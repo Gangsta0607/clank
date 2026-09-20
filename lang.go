@@ -333,6 +333,9 @@ type Msgs struct {
 	UpdNoAsset  string
 	UpdNoExeZip string
 	UpdNoExeTar string
+	UpdNoSums   string
+	UpdSumBad   string
+	UpdSumOK    string
 
 	// systemprompt_unix.go
 	ShellApprox  string

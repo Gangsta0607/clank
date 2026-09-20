@@ -267,6 +267,9 @@ var EN = Msgs{
 	UpdNoAsset:  "no suitable archive for %s/%s in release %s",
 	UpdNoExeZip: "clank.exe not found inside the zip archive",
 	UpdNoExeTar: "clank executable not found inside the tar.gz archive",
+	UpdNoSums:   "no checksums.txt in the release — installing unverified",
+	UpdSumBad:   "archive %s checksum mismatch: expected %s, got %s",
+	UpdSumOK:    "checksum of %s matches",
 
 	// systemprompt_unix.go
 	ShellApprox:  " (via $SHELL, approximate)",

@@ -37,24 +37,21 @@ jobs:
       - name: Prepare release notes
         run: |
           tag="${{ github.ref_name }}"
+          # Аннотацию тега (туда make publish кладёт NOTES) явно дотягиваем:
+          # checkout не гарантирует объект тега в клоне, без него тело пустое.
+          git fetch origin "+refs/tags/$tag:refs/tags/$tag" || true
           body="$(git for-each-ref "refs/tags/$tag" --format='%(contents:body)' | sed -e '/./,$!d')"
-          {
-            if [ -n "$body" ]; then printf '%s\n\n' "$body"; fi
-            echo '## Контрольные суммы (SHA-256)'
-            echo
-            echo '```'
-            cat build/release/checksums.txt
-            echo '```'
-          } > body.md
+          printf '%s\n' "$body" > body.md
           cat body.md
 
       - name: Publish to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           body_path: body.md
           files: |
             build/release/*.zip
             build/release/*.tar.gz
+            build/release/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
