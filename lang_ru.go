@@ -278,6 +278,66 @@ var RU = Msgs{
 	LangShow:   "язык интерфейса:",
 	LangSaved:  "язык сохранён:",
 	LangBadArg: "неизвестный язык: %s (используй clank language en|ru|auto)",
+
+	HelpAsk: `clank <вопрос> — спросить модель. stdin из пайпа подхватывается сам.
+Флаги: -c (форс чтения stdin), -r (продолжить сессию своей вкладки),
+-i <файл> (прикрепить картинку), --yolo=on|off, --reasoning=on|off,
+-v (подробно) / -q (молча), -- (дальше — текст вопроса).
+Вопрос, начинающийся со слова-команды (models, config…), задавай явно:
+clank ask models …`,
+	HelpConfigInit: `clank config init — мастер настройки профиля "default".
+По шагам спросит base_url, api_key, предложит выбрать модель и проверить
+tool calls. В скриптах вместо мастера — set-url/set-key/set-model.`,
+	HelpConfigAdd: `clank config add <имя> — создать или перенастроить именованный профиль.
+Удобно держать по профилю на провайдера и переключаться через config use.`,
+	HelpConfigUse: `clank config use <имя> — сделать профиль активным.
+Все вопросы и тесты идут через активный профиль.`,
+	HelpConfigList: `clank config list — профили, активный помечен *. Показывает
+url, модели и включённые tool calls.`,
+	HelpConfigRm: `clank config rm <имя> — удалить профиль. Если удалён активный,
+clank сам переключится на самый свежий из оставшихся.`,
+	HelpConfigShow: `clank config show — активный профиль целиком: url, ключ
+(замаскирован), модели, reasoning, vision, yolo, язык, разрешённые команды.`,
+	HelpConfigSet: `clank config set-* — точечная правка активного профиля:
+set-url, set-key, set-model <a[,b,c]> (цепочка фоллбэка), set-proxy <url|->,
+set-tools <true|false>, set-reasoning <on|off|->, set-exec-timeout <сек>.`,
+	HelpTestTools: `clank config test-tools — проверяет, вызывает ли модель tool_call
+на задаче, где без инструмента не ответить точно. Результат показывают,
+с твоего подтверждения пишут use_tools в профиль.`,
+	HelpTestReasoning: `clank config test-reasoning — подбирает параметры управления
+мышлением (effort или бюджет токенов) и смотрит, thinking-блок в ответах.
+Печатает что нашлось; про блок reasoning пишет "найден / не найден".
+С твоего подтверждения включает reasoning в профиле.`,
+	HelpTestVision: `clank config test-vision — шлёт модели зелёный квадрат с вопросом
+о цвете и показывает её ответ. Видит ли она картинку — решаешь сам по ответу;
+с твоего подтверждения результат пишут в профиль (нужен для промпта).`,
+	HelpTestModel: `clank config test-model — все три проверки разом (tools,
+reasoning, vision) с общим итогом. Один вопрос — сохранить всё в профиль.`,
+	HelpConfigAllow: `clank config allow-rm <команда> — убрать команду из списка
+выполняемых без подтверждения. allow-clear — очистить список целиком.
+Команды попадают в список, когда на вопрос "выполнить?" отвечаешь "a".`,
+	HelpSessionShow: `clank session show — транскрипт сессии текущей вкладки:
+вопросы, ответы, вызовы инструментов.`,
+	HelpSessionClear: `clank session clear — стереть сессию текущей вкладки.
+С --all — стереть сессии всех терминалов.`,
+	HelpSessionList: `clank session list — все сессии на машине. * — текущая
+вкладка; видно, чей шелл ещё жив, а чей терминал уже закрыт.`,
+	HelpYolo: `clank yolo [on|off] — глобальный режим без подтверждений команд.
+Без аргумента показывает состояние. На одну реплику — флаг --yolo=on|off.`,
+	HelpLanguage: `clank language [en|ru|auto] — язык интерфейса.
+Без аргумента показывает текущий. auto — определять по LANG в терминале.`,
+	HelpUpdate: `clank update [-y] — свериться с GitHub-релизами и поставить новую
+версию поверх текущей. Скачанное кешируется: при ошибке прав повтор делают
+через sudo clank update без перекачки.`,
+	HelpPurge: `clank purge [-y] — стереть ~/.config/clank/ (профили, сессии, кэш).
+Бинарник остаётся. Это заводской сброс настроек.`,
+	HelpUninstall: `clank uninstall [-y] — удалить исполняемый файл clank.
+Настройки и сессии остаются.`,
+	HelpNuke: `clank nuke [-y] — удалить и бинарник, и все данные.
+Точка невозврата; спросит подтверждение.`,
+	HelpUnknown: "нет такой справки: %s",
+	HelpTopics: `разделы: ask models config session yolo language update purge uninstall nuke
+у config и session есть вложенные: например clank help config test-model`,
 	Usage: `clank — минималистичный CLI к OpenAI-совместимому API
 
 использование:
@@ -319,6 +379,7 @@ var RU = Msgs{
   clank uninstall [-y]                  удалить исполняемый файл clank
   clank nuke [-y]                       полностью удалить clank и все его данные
 
+  clank help <команда>                справка по разделу, вложенные тоже: help config test-model
   clank version
 
 примеры:

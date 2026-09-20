@@ -48,8 +48,7 @@ func main() {
 		fmt.Println("clank", version)
 		code = exitOK
 	case "-h", "--help", "help":
-		usage()
-		code = exitOK
+		code = cmdHelp(rest)
 	default:
 		// Всё, что не подкоманда, — вопрос. Спрашивать приходится чаще,
 		// чем настраивать, так что `clank "..."` работает без слова ask.

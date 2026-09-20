@@ -278,6 +278,67 @@ var EN = Msgs{
 	LangShow:   "interface language:",
 	LangSaved:  "language saved:",
 	LangBadArg: "unknown language: %s (use clank language en|ru|auto)",
+
+	HelpAsk: `clank <question> — ask the model. Piped stdin is picked up automatically.
+Flags: -c (force stdin read), -r (resume your tab's session),
+-i <file> (attach an image), --yolo=on|off, --reasoning=on|off,
+-v (verbose) / -q (quiet), -- (the rest is question text).
+A question starting with a command word (models, config…) needs the
+explicit form: clank ask models …`,
+	HelpConfigInit: `clank config init — setup wizard for the "default" profile.
+Asks base_url and api_key step by step, offers model pick and a tool calls
+check. In scripts use set-url/set-key/set-model instead of the wizard.`,
+	HelpConfigAdd: `clank config add <name> — create or reconfigure a named profile.
+Handy for one profile per provider, switch with config use.`,
+	HelpConfigUse: `clank config use <name> — make a profile active.
+All questions and tests go through the active profile.`,
+	HelpConfigList: `clank config list — profiles, active one marked with *.
+Shows url, models and tool calls state.`,
+	HelpConfigRm: `clank config rm <name> — remove a profile. If it was active,
+clank switches to the freshest remaining one by itself.`,
+	HelpConfigShow: `clank config show — the active profile in full: url, key
+(masked), models, reasoning, vision, yolo, language, allowed commands.`,
+	HelpConfigSet: `clank config set-* — tweak the active profile:
+set-url, set-key, set-model <a[,b,c]> (fallback chain), set-proxy <url|->,
+set-tools <true|false>, set-reasoning <on|off|->, set-exec-timeout <sec>.`,
+	HelpTestTools: `clank config test-tools — checks whether the model makes
+a tool_call on a task that needs a tool for an exact answer. Shows the result;
+with your confirmation writes use_tools into the profile.`,
+	HelpTestReasoning: `clank config test-reasoning — finds thinking controls
+(effort or token budget) and looks for thinking blocks in answers.
+Prints what it found ("reasoning block: found / not found").
+With your confirmation turns reasoning on in the profile.`,
+	HelpTestVision: `clank config test-vision — sends the model a green square
+asking its color and shows the answer. Whether it really saw the picture
+is your call from the answer; with your confirmation the result is saved
+into the profile (drives the prompt).`,
+	HelpTestModel: `clank config test-model — all three checks at once (tools,
+reasoning, vision) with a combined summary. One question — save all.`,
+	HelpConfigAllow: `clank config allow-rm <command> — stop running a command
+without confirmation. allow-clear — wipe the whole list.
+Commands land there when you answer "a" to the "run?" prompt.`,
+	HelpSessionShow: `clank session show — transcript of the current tab's session:
+questions, answers, tool calls.`,
+	HelpSessionClear: `clank session clear — wipe the current tab's session.
+With --all — wipe every terminal's sessions.`,
+	HelpSessionList: `clank session list — all sessions on the machine. * is the
+current tab; shows whose shell is still alive and whose terminal is closed.`,
+	HelpYolo: `clank yolo [on|off] — global no-confirmation mode for commands.
+No args shows the state. For one reply — the --yolo=on|off flag.`,
+	HelpLanguage: `clank language [en|ru|auto] — interface language.
+No args shows the current one. auto — detect from the terminal LANG.`,
+	HelpUpdate: `clank update [-y] — check GitHub releases and install the new
+version over the current one. Downloads are cached: on permission errors
+retry with sudo clank update, no re-download.`,
+	HelpPurge: `clank purge [-y] — wipe ~/.config/clank/ (profiles, sessions, cache).
+The binary stays. Factory reset for the settings.`,
+	HelpUninstall: `clank uninstall [-y] — remove the clank executable.
+Settings and sessions stay.`,
+	HelpNuke: `clank nuke [-y] — remove both the binary and all data.
+Point of no return; asks for confirmation.`,
+	HelpUnknown: "no such help topic: %s",
+	HelpTopics: `topics: ask models config session yolo language update purge uninstall nuke
+config and session have nested topics: e.g. clank help config test-model`,
 	Usage: `clank — a minimal CLI for OpenAI-compatible APIs
 
 usage:
@@ -319,6 +380,7 @@ usage:
   clank uninstall [-y]                  remove the clank executable
   clank nuke [-y]                       fully remove clank and all its data
 
+  clank help <command>                help on a topic, nested too: help config test-model
   clank version
 
 examples:

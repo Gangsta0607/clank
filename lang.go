@@ -32,6 +32,31 @@ type Msgs struct {
 	LangSaved  string
 	LangBadArg string
 
+	HelpAsk           string
+	HelpConfigInit    string
+	HelpConfigAdd     string
+	HelpConfigUse     string
+	HelpConfigList    string
+	HelpConfigRm      string
+	HelpConfigShow    string
+	HelpConfigSet     string
+	HelpTestTools     string
+	HelpTestReasoning string
+	HelpTestVision    string
+	HelpTestModel     string
+	HelpConfigAllow   string
+	HelpSessionShow   string
+	HelpSessionClear  string
+	HelpSessionList   string
+	HelpYolo          string
+	HelpLanguage      string
+	HelpUpdate        string
+	HelpPurge         string
+	HelpUninstall     string
+	HelpNuke          string
+	HelpUnknown       string
+	HelpTopics        string
+
 	// ask.go
 	StdinReadFail  string
 	ImageFlagNeeds string
@@ -366,6 +391,60 @@ func initLang() {
 		return
 	}
 	applyLang(resolveLang(cf.Language))
+}
+
+// cmdHelp — `clank help [команда [подкоманда]]`. Без аргументов — общий
+// текст; с путём вроде `help config test-model` — справка по разделу.
+func cmdHelp(args []string) int {
+	if len(args) == 0 {
+		usage()
+		return exitOK
+	}
+	key := strings.ToLower(strings.Join(args, " "))
+	topics := map[string]string{
+		"ask":                     M.HelpAsk,
+		"models":                  M.ModelsHelp,
+		"config":                  M.ConfigUsage,
+		"config init":             M.HelpConfigInit,
+		"config add":              M.HelpConfigAdd,
+		"config use":              M.HelpConfigUse,
+		"config list":             M.HelpConfigList,
+		"config rm":               M.HelpConfigRm,
+		"config show":             M.HelpConfigShow,
+		"config set":              M.HelpConfigSet,
+		"config set-url":          M.HelpConfigSet,
+		"config set-key":          M.HelpConfigSet,
+		"config set-model":        M.HelpConfigSet,
+		"config set-models":       M.HelpConfigSet,
+		"config set-proxy":        M.HelpConfigSet,
+		"config set-tools":        M.HelpConfigSet,
+		"config set-reasoning":    M.HelpConfigSet,
+		"config set-exec-timeout": M.HelpConfigSet,
+		"config test-tools":       M.HelpTestTools,
+		"config test-reasoning":   M.HelpTestReasoning,
+		"config test-vision":      M.HelpTestVision,
+		"config test-model":       M.HelpTestModel,
+		"config allow-rm":         M.HelpConfigAllow,
+		"config allow-clear":      M.HelpConfigAllow,
+		"config allow":            M.HelpConfigAllow,
+		"session":                 M.SessionUsage,
+		"session show":            M.HelpSessionShow,
+		"session clear":           M.HelpSessionClear,
+		"session list":            M.HelpSessionList,
+		"yolo":                    M.HelpYolo,
+		"language":                M.HelpLanguage,
+		"update":                  M.HelpUpdate,
+		"purge":                   M.HelpPurge,
+		"uninstall":               M.HelpUninstall,
+		"nuke":                    M.HelpNuke,
+	}
+	if t, ok := topics[key]; ok {
+		fmt.Println(t)
+		return exitOK
+	}
+	fail(M.HelpUnknown, strings.Join(args, " "))
+	fmt.Println(M.HelpTopics)
+	return exitConfig
 }
 
 // cmdLanguage — `clank language [en|ru|auto]`: без аргумента показывает
