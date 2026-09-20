@@ -78,16 +78,18 @@ define do_publish
 	fi
 	@echo "Запуск проверок make check..."
 	@$(MAKE) check
-	@latest=$$(git describe --tags --abbrev=0 --match "v[0-9]*.[0-9]*.[0-9]*" 2>/dev/null || true); \
+	@latest=$$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null || true); \
 	if [ -n "$(VERSION)" ] && [ "$(VERSION)" != "$$latest" ]; then \
 		target_ver="$(VERSION)"; \
 		case "$$target_ver" in v*) ;; *) target_ver="v$$target_ver" ;; esac; \
 	else \
 		kind="$(1)"; \
 		if [ -z "$$latest" ]; then \
-			if [ "$$kind" = "major" ]; then target_ver="v1.0.0"; else target_ver="v0.1.0"; fi; \
+			if [ "$$kind" = "major" ]; then target_ver="v1.0.0"; elif [ "$$kind" = "minor" ]; then target_ver="v0.1.0"; else target_ver="v0.0.1"; fi; \
 		else \
 			clean="$${latest#v}"; \
+			dots=$$(echo "$$clean" | tr -cd '.' | wc -c | tr -d ' '); \
+			if [ "$$dots" -eq 1 ]; then clean="$${clean}.0"; elif [ "$$dots" -eq 0 ]; then clean="$${clean}.0.0"; fi; \
 			major=$$(echo "$$clean" | cut -d. -f1); \
 			minor=$$(echo "$$clean" | cut -d. -f2); \
 			patch=$$(echo "$$clean" | cut -d. -f3); \
@@ -98,8 +100,8 @@ define do_publish
 			esac; \
 		fi; \
 	fi; \
-	echo "Предыдущая версия: $${latest:-<нет>}"; \
-	echo "Новая версия:      $$target_ver"; \
+	echo "Предыдущий тег: $${latest:-<нет>}"; \
+	echo "Новая версия:   $$target_ver"; \
 	echo "Создаю тег $$target_ver..."; \
 	git tag -a "$$target_ver" -m "Release $$target_ver"; \
 	echo "Отправляю тег $$target_ver в origin..."; \
