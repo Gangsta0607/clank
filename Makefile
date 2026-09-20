@@ -6,7 +6,13 @@ export CGO_ENABLED := 0
 GOFLAGS := -trimpath
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
-# Список всех 11 целевых платформ для релиза
+# Текст релизных заметок: make minor NOTES="что нового".
+# Едет в аннотацию тега (через окружение — буквально, без раскрытия $),
+# Actions кладёт его в тело GitHub-релиза перед чексуммами.
+NOTES ?=
+export NOTES
+
+# Целевые платформы для релиза: всё, что собирается go build без правок Go-файлов.
 PLATFORMS := \
 	darwin/amd64 \
 	darwin/arm64 \
@@ -14,11 +20,34 @@ PLATFORMS := \
 	linux/arm64 \
 	linux/386 \
 	linux/arm \
+	linux/loong64 \
+	linux/mips \
+	linux/mips64 \
+	linux/mips64le \
+	linux/mipsle \
+	linux/ppc64 \
+	linux/ppc64le \
+	linux/riscv64 \
+	linux/s390x \
 	windows/amd64 \
 	windows/arm64 \
 	windows/386 \
 	freebsd/amd64 \
-	freebsd/386
+	freebsd/386 \
+	freebsd/arm \
+	freebsd/arm64 \
+	netbsd/386 \
+	netbsd/amd64 \
+	netbsd/arm \
+	netbsd/arm64 \
+	openbsd/386 \
+	openbsd/amd64 \
+	openbsd/arm \
+	openbsd/arm64 \
+	openbsd/ppc64 \
+	openbsd/riscv64 \
+	dragonfly/amd64 \
+	android/arm64
 
 .PHONY: all build install clean check fmt vet release publish publish-patch publish-minor publish-major patch minor major
 
@@ -120,7 +149,11 @@ define do_publish
 	echo "предыдущая версия: $${latest:-<нет>}"; \
 	echo "новая версия:       $$target_ver"; \
 	echo "создаю тег $$target_ver..."; \
-	git tag -a "$$target_ver" -m "Release $$target_ver"; \
+	if [ -n "$$NOTES" ]; then \
+		git tag -a "$$target_ver" -m "Release $$target_ver" -m "$$NOTES"; \
+	else \
+		git tag -a "$$target_ver" -m "Release $$target_ver"; \
+	fi; \
 	echo "отправляю тег $$target_ver в origin..."; \
 	git push origin "$$target_ver"; \
 	echo "готово: тег $$target_ver отправлен, сборка запущена в Actions."
