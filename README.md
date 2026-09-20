@@ -1,77 +1,58 @@
+_Читать на русском: [README.ru.md](README.ru.md)_
+
 # clank
 
-Спрашиваешь нейросеть прямо в терминале — без браузера и без переключения окон. Удобнее всего так: отправляешь туда вывод команды и задаёшь вопрос по нему.
+A small CLI agent for the terminal.
 
 ```bash
-dmesg | tail -50 | clank "в чём тут ошибка"
-clank "почему grub не видит второй диск"
+dmesg | tail -50 | clank "what's wrong here"
+clank "why doesn't grub see the second disk"
 ```
 
-Работает с любым OpenAI-совместимым API: облачные провайдеры, локальные Ollama / LocalAI / vLLM — что угодно, лишь бы отвечало по тому же протоколу.
+Works with any OpenAI-compatible API: cloud providers, local Ollama / LocalAI / vLLM.
 
----
 
-## Что умеет
+## What it can do
 
-- Отвечает на вопросы обычным текстом, без markdown-мусора.
-- Читает контекст из пайпа: логи, диффы, вывод любых команд.
-- Помнит разговор в пределах вкладки терминала — `clank -r "а теперь так"`.
-- Может сам выполнить команду, чтобы разобраться (каждый раз спрашивает разрешения, кроме команд из белого списка).
-- Если вопрос неясный — переспросит, предложит варианты.
-- Понимает картинки: `clank -i скрин.png "что тут не так"`.
+- Answers questions in plain text, no markdown garbage (well, it tries).
+- Reads context from a pipe: logs, diffs, output of any commands.
+- Remembers the conversation within the terminal tab — `clank -r "now this way"`.
+- Can run commands itself to figure things out.
+- If the question is unclear — asks back, suggests options.
+- Understands images: `clank -i screen.png "what's wrong here"`, or asks permission to read them (e.g. for `clank "find all pictures with triangles"` it loads them itself).
 
----
 
-## Установка
+## Installation
 
-Готовые сборки лежат на странице релизов: https://github.com/Gangsta0607/clank/releases
+Ready-made builds are on the releases page: https://github.com/Gangsta0607/clank/releases
 
-Скачай архив под свою систему, достань оттуда файл `clank` и положи его в любую папку из `PATH`, например:
+
+## Install from source
 
 ```bash
-tar -xzf clank-*.tar.gz
-sudo mv clank /usr/local/bin/
-clank version
+git clone https://github.com/Gangsta0607/clank.git
+cd clank
+make
+sudo make install
 ```
 
-На Windows распакуй zip и положи `clank.exe` в папку из `PATH`.
 
----
-
-## Быстрый старт
+## Quick start
 
 ```bash
-clank config init     # спросит адрес API, ключ и модель, сохранит профиль
-clank "проверка связи"
+clank config init     # asks for the API address, key and model, saves a profile
+clank "connection check"
 ```
 
-Если провайдеров несколько — заведи под каждый свой профиль (`clank config add ...`) и переключайся между ними (`clank config use ...`).
+If you have several providers — create a profile for each (`clank config add ...`) and switch between them (`clank config use ...`).
 
----
 
-## Сборка из исходников
-
-Нужен Go 1.22+ (зависимостей нет, только стандартная библиотека):
-
-```bash
-make                  # бинарь появится в bin/clank
-sudo make install     # положит его в /usr/local/bin
-```
-
----
-
-## Что дальше
-
-Полный список команд и флагов — во встроенной справке:
+The full list of commands and flags is in the built-in help:
 
 ```bash
 clank help
 ```
 
-Там же: управление профилями и моделями, белый список команд, сессии, режим без подтверждений, самообновление (`clank update`) и удаление.
-
----
-
-## Лицензия
+## License
 
 MIT / Public Domain.
