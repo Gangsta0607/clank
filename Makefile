@@ -70,22 +70,39 @@ release: clean
 	@cd build/release && (shasum -a 256 clank-* 2>/dev/null || sha256sum clank-* 2>/dev/null) > checksums.txt
 	@echo "Релизы собраны в build/release/"
 
-# Хелпер для создания и пуша тега (SemVer bump: patch, minor, major)
+# Хелпер для создания и пуша тега (SemVer bump: patch, minor, major).
+# Формат: patch=0 пишется коротко (v1.4, v2.0), patch>0 — полностью (v1.4.1).
 define do_publish
 	@if [ -n "$$(git status --porcelain)" ]; then \
-		echo "Ошибка: в рабочей директории есть незакоммиченные изменения! Закоммитьте их перед публикацией."; \
+		echo "рабочая копия нечиста: есть незафиксированные изменения."; \
+		echo "посмотрите git status, зафиксируйте их и повторите."; \
 		exit 1; \
 	fi
-	@echo "Запуск проверок make check..."
+	@git fetch origin main -q 2>/dev/null || true; \
+	ahead=$$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0); \
+	if [ "$$ahead" != "0" ]; then \
+		echo "локальный main опережает origin/main на $$ahead коммита(ов)."; \
+		echo "выполните git push origin main и повторите — иначе Actions соберёт не тот код."; \
+		exit 1; \
+	fi
+	@echo "проверяю: make check..."
 	@$(MAKE) check
 	@latest=$$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null || true); \
+	if [ -n "$$latest" ]; then \
+		tag_commit=$$(git rev-list -n 1 "$$latest" 2>/dev/null || true); \
+		head_commit=$$(git rev-parse HEAD); \
+		if [ -n "$$tag_commit" ] && [ "$$tag_commit" = "$$head_commit" ]; then \
+			echo "с версии $$latest ничего не изменилось — публиковать нечего."; \
+			exit 1; \
+		fi; \
+	fi; \
 	if [ -n "$(VERSION)" ] && [ "$(VERSION)" != "$$latest" ]; then \
 		target_ver="$(VERSION)"; \
 		case "$$target_ver" in v*) ;; *) target_ver="v$$target_ver" ;; esac; \
 	else \
 		kind="$(1)"; \
 		if [ -z "$$latest" ]; then \
-			if [ "$$kind" = "major" ]; then target_ver="v1.0.0"; elif [ "$$kind" = "minor" ]; then target_ver="v0.1.0"; else target_ver="v0.0.1"; fi; \
+			if [ "$$kind" = "major" ]; then target_ver="v1.0"; elif [ "$$kind" = "minor" ]; then target_ver="v0.1"; else target_ver="v0.0.1"; fi; \
 		else \
 			clean="$${latest#v}"; \
 			dots=$$(echo "$$clean" | tr -cd '.' | wc -c | tr -d ' '); \
@@ -94,19 +111,19 @@ define do_publish
 			minor=$$(echo "$$clean" | cut -d. -f2); \
 			patch=$$(echo "$$clean" | cut -d. -f3); \
 			case "$$kind" in \
-				major) target_ver="v$$((major + 1)).0.0" ;; \
-				minor) target_ver="v$${major}.$$((minor + 1)).0" ;; \
+				major) target_ver="v$$((major + 1)).0" ;; \
+				minor) target_ver="v$${major}.$$((minor + 1))" ;; \
 				*)     target_ver="v$${major}.$${minor}.$$((patch + 1))" ;; \
 			esac; \
 		fi; \
 	fi; \
-	echo "Предыдущий тег: $${latest:-<нет>}"; \
-	echo "Новая версия:   $$target_ver"; \
-	echo "Создаю тег $$target_ver..."; \
+	echo "предыдущая версия: $${latest:-<нет>}"; \
+	echo "новая версия:       $$target_ver"; \
+	echo "создаю тег $$target_ver..."; \
 	git tag -a "$$target_ver" -m "Release $$target_ver"; \
-	echo "Отправляю тег $$target_ver в origin..."; \
+	echo "отправляю тег $$target_ver в origin..."; \
 	git push origin "$$target_ver"; \
-	echo "Готово! Тег $$target_ver отправлен на GitHub. Сборка релиза запущена в Actions."
+	echo "готово: тег $$target_ver отправлен, сборка запущена в Actions."
 endef
 
 publish:
