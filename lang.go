@@ -63,6 +63,7 @@ type Msgs struct {
 	CompletionWriteFail string
 	CompletionZshHint   string
 	CompletionRemoved   string
+	CompletionNone      string
 	AskCompletion       string
 	HelpCompletion      string
 
@@ -495,6 +496,7 @@ func cmdLanguage(args []string) int {
 		return exitConfig
 	}
 	applyLang(resolveLang(cf.Language))
+	reinstallCompletions(&cf)
 	name := M.LangNameEN
 	if curLang == LangRU {
 		name = M.LangNameRU

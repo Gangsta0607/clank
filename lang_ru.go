@@ -342,16 +342,20 @@ reasoning, vision) с общим итогом. Один вопрос — сох�
 	HelpTopics: `разделы: ask models config session yolo language completion update purge uninstall nuke
 у config и session есть вложенные: например clank help config test-model`,
 
-	CompletionUsage:     "использование: clank completion [zsh|bash|fish|install [шелл]]",
+	CompletionUsage:     "использование: clank completion [install|uninstall|print] [шелл]",
 	CompletionBadShell:  "неизвестный шелл: %s (умею: zsh, bash, fish)",
 	CompletionDone:      "автодополнение установлено: %s",
 	CompletionWriteFail: "не смог записать автодополнение: %v",
 	CompletionZshHint:   "добавь в .zshrc, если ещё нет: fpath=(~/.zfunc $fpath)",
 	CompletionRemoved:   "убрано автодополнение: %s",
+	CompletionNone:      "автодополнение не ставилось — убирать нечего",
 	AskCompletion:       "поставить автодополнение команд для %s (%s)? [Y/n]: ",
-	HelpCompletion: `clank completion [zsh|bash|fish] — напечатать скрипт автодополнения.
-clank completion install — поставить его для текущего шелла.
-Предложить установку могут и сами при первом config init.`,
+	HelpCompletion: `clank completion — поставить автодополнение для текущего шелла.
+clank completion install [шелл] — поставить явно.
+clank completion uninstall — убрать всё установленное.
+clank completion print [шелл] — напечатать скрипт (свой путь, отладка).
+Скрипт ставится на текущем языке интерфейса; смена языка через
+clank language переустанавливает его автоматически.`,
 	Usage: `clank — минималистичный CLI к OpenAI-совместимому API
 
 использование:
@@ -388,7 +392,7 @@ clank completion install — поставить его для текущего �
   clank session list                    все сессии на машине
 
   clank language [en|ru|auto]           язык интерфейса (без аргумента — показать)
-  clank completion [шелл|install]        скрипт автодополнения или его установка
+  clank completion [install|uninstall|print] [шелл]
   clank yolo [on|off]                   включить/выключить глобальный режим YOLO (без подтверждения команд)
   clank update [-y]                     проверить и установить новую версию с GitHub
   clank purge [-y]                      стереть все пользовательские данные (~/.config/clank/)

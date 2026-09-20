@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -30,9 +31,11 @@ func caseLabels(t *testing.T, file, fn string) []string {
 
 func TestCompletionCoversCommands(t *testing.T) {
 	scripts := map[string]string{
-		"zsh":  zshCompletion,
-		"bash": bashCompletion,
-		"fish": fishCompletion,
+		"zsh-ru":  zshCompletionRU,
+		"zsh-en":  zshCompletionEN,
+		"fish-ru": fishCompletionRU,
+		"fish-en": fishCompletionEN,
+		"bash":    bashCompletion,
 	}
 	for _, cmd := range caseLabels(t, "main", "main.go") {
 		for shell, s := range scripts {
@@ -92,6 +95,29 @@ func TestCompletionUnknownShell(t *testing.T) {
 	if code := printCompletionScript("powershell"); code != exitConfig {
 		t.Fatalf("expected exitConfig, got %d", code)
 	}
+}
+
+// reinstallCompletions ставит вариант под текущий язык: был EN — после
+// переключения на RU в файле должны быть русские описания.
+func TestCompletionReinstallFollowsLanguage(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	applyLang(LangEN)
+	cf := ConfigFile{Profiles: map[string]Profile{}}
+	path, err := installCompletion(&cf, "zsh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "ask the model") {
+		t.Fatalf("expected EN script, got:\n%.200s", data)
+	}
+	applyLang(LangRU)
+	reinstallCompletions(&cf)
+	data, _ = os.ReadFile(path)
+	if !strings.Contains(string(data), "спросить модель") {
+		t.Fatalf("expected RU script after reinstall, got:\n%.200s", data)
+	}
+	applyLang(LangEN)
 }
 
 func TestNormalizeShellToken(t *testing.T) {

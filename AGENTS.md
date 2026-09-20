@@ -37,7 +37,7 @@ All code is in package `main` (single package, flat directory). No subdirectorie
 | `client.go`     | HTTP client, OpenAI-compatible API types, retry/fallback    |
 | `config.go`     | Config file load/save, profile management, allowed-commands |
 | `configcmd.go`  | `clank config *` and `clank models` subcommands             |
-| `completion.go` | `clank completion` scripts (zsh/bash/fish), install/remove |
+| `completion.go` | `clank completion` scripts (zsh/bash/fish RU+EN), install/remove |
 | `completion_test.go` | sync test: scripts cover all commands/flags            |
 | `lang.go`       | Language tables switch, locale detect, `clank language`     |
 | `lang_ru.go`    | Russian UI strings (`RU` table)                             |
@@ -380,6 +380,8 @@ flags missing fields. Tool JSON schemas stay English (see above).
 - `clank completion install` records paths in `ConfigFile.Completions`;
   `uninstall`/`nuke` remove them. Shell scripts are hand-written —
   `completion_test.go` fails if a command/flag is missing from any script.
+  zsh/fish scripts ship RU+EN variants picked by UI language; `clank
+  language` reinstalls recorded scripts automatically.
 
 ---
 

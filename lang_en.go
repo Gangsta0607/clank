@@ -343,16 +343,20 @@ Point of no return; asks for confirmation.`,
 	HelpTopics: `topics: ask models config session yolo language completion update purge uninstall nuke
 config and session have nested topics: e.g. clank help config test-model`,
 
-	CompletionUsage:     "usage: clank completion [zsh|bash|fish|install [shell]]",
+	CompletionUsage:     "usage: clank completion [install|uninstall|print] [shell]",
 	CompletionBadShell:  "unknown shell: %s (supported: zsh, bash, fish)",
 	CompletionDone:      "completion installed: %s",
 	CompletionWriteFail: "could not write completion: %v",
 	CompletionZshHint:   "add to .zshrc if missing: fpath=(~/.zfunc $fpath)",
 	CompletionRemoved:   "completion removed: %s",
+	CompletionNone:      "no completions installed — nothing to remove",
 	AskCompletion:       "install command completion for %s (%s)? [Y/n]: ",
-	HelpCompletion: `clank completion [zsh|bash|fish] — print the completion script.
-clank completion install — install it for the current shell.
-Install may also be offered automatically on the first config init.`,
+	HelpCompletion: `clank completion — install completion for the current shell.
+clank completion install [shell] — install explicitly.
+clank completion uninstall — remove everything installed.
+clank completion print [shell] — print the script (custom path, debugging).
+The script follows the interface language; changing it via
+clank language reinstalls automatically.`,
 	Usage: `clank — a minimal CLI for OpenAI-compatible APIs
 
 usage:
@@ -389,7 +393,7 @@ usage:
   clank session list                    all sessions on the machine
 
   clank language [en|ru|auto]           interface language (no args — show)
-  clank completion [shell|install]      completion script or its install
+  clank completion [install|uninstall|print] [shell]
   clank yolo [on|off]                   global YOLO mode on/off (no command confirmations)
   clank update [-y]                     check for and install a new version from GitHub
   clank purge [-y]                      wipe all user data (~/.config/clank/)
