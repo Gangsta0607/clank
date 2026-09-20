@@ -93,3 +93,18 @@ func TestCompletionUnknownShell(t *testing.T) {
 		t.Fatalf("expected exitConfig, got %d", code)
 	}
 }
+
+func TestNormalizeShellToken(t *testing.T) {
+	for in, want := range map[string]string{
+		"-zsh":                          "zsh",
+		"-bash":                         "bash",
+		"zsh":                           "zsh",
+		"zsh (via $SHELL, approximate)": "zsh",
+		"Fish":                          "fish",
+		"":                              "unknown",
+	} {
+		if got := normalizeShellToken(in); got != want {
+			t.Errorf("normalizeShellToken(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

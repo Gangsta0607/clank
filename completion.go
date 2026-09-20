@@ -40,14 +40,34 @@ func printCompletionScript(shell string) int {
 	return exitOK
 }
 
-// completionShell — текущий шелл одним словом (detectShell может вернуть
-// "zsh (via $SHELL, approximate)" — берём первое слово).
+// completionShell — текущий шелл одним словом. Сначала смотрим реального
+// родителя (detectShell), если там мусор — откатываемся на basename $SHELL.
 func completionShell() string {
-	parts := strings.Fields(detectShell())
+	if s := normalizeShellToken(detectShell()); supportedShell(s) {
+		return s
+	}
+	if sh := os.Getenv("SHELL"); sh != "" {
+		if s := normalizeShellToken(filepath.Base(sh)); supportedShell(s) {
+			return s
+		}
+	}
+	return "unknown"
+}
+
+// normalizeShellToken чистит имя процесса шелла: первое слово, нижний
+// регистр, без дефиса логин-шелла ("-zsh" → "zsh"). detectShell может
+// вернуть "zsh (via $SHELL, approximate)" — берём первое слово.
+func normalizeShellToken(s string) string {
+	parts := strings.Fields(s)
 	if len(parts) == 0 {
 		return "unknown"
 	}
-	return strings.ToLower(parts[0])
+	return strings.TrimPrefix(strings.ToLower(parts[0]), "-")
+}
+
+func supportedShell(s string) bool {
+	_, ok := completionScript(s)
+	return ok
 }
 
 func completionScript(shell string) (string, bool) {
@@ -71,10 +91,9 @@ func completionTarget(shell string) (string, bool) {
 	}
 	switch shell {
 	case "zsh":
-		omz := filepath.Join(home, ".oh-my-zsh", "completions")
-		if st, err := os.Stat(omz); err == nil && st.IsDir() {
-			return filepath.Join(omz, "_clank"), true
-		}
+		// Всегда ~/.zfunc: детерминировано работает и с oh-my-zsh, и без.
+		// Гадать по подпапкам omz не стали — у него нет гарантированного
+		// места под сторонние дополнения, а fpath юзер правит один раз.
 		return filepath.Join(home, ".zfunc", "_clank"), true
 	case "bash":
 		return filepath.Join(home, ".local", "share", "bash-completion", "completions", "clank"), true

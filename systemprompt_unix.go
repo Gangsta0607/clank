@@ -20,7 +20,9 @@ func detectShell() string {
 	if err == nil {
 		s := strings.TrimSpace(string(out))
 		if s != "" {
-			return filepath.Base(s)
+			// Логин-шелл виден в ps как "-zsh" (дефис в argv[0]) —
+			// это всё тот же zsh, дефис срезаем.
+			return strings.TrimPrefix(filepath.Base(s), "-")
 		}
 	}
 	if sh := os.Getenv("SHELL"); sh != "" {
