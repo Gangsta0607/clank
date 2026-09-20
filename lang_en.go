@@ -133,22 +133,22 @@ var EN = Msgs{
 	TestingParams:     "testing parameters",
 	ReasonResults:     "\ncheck results:",
 	ReasonNone:        "none",
-	ReasonEffortOK:    "  reasoning_effort control: supported (on: %s, off: %s)",
+	ReasonEffortOK:    "  reasoning_effort control: supported (on: %s, off: %s)\n",
 	ReasonBudgetOK:    "  token budget control: supported (reasoning_budget)",
 	ReasonNoParams:    "  reasoning control parameters: not supported by server",
-	ReasonHasOutput:   "  reasoning generation (reasoning_content / <think>): YES",
-	ReasonNoOutput:    "  reasoning generation: not detected (model answers directly)",
+	ReasonHasOutput:   "  reasoning block: found",
+	ReasonNoOutput:    "  reasoning block: not found",
 	ReasonUnsupported: "this model neither uses nor tunes reasoning",
 	AskReasonOn:       "\nturn reasoning on for profile %s? [Y/n]: ",
 	SavedReasonOn:     "saved (reasoning: on)",
-	AskReasonOff:      "force reasoning off? [y/N]: ",
-	SavedReasonOff:    "saved (reasoning: off)",
 	SettingsKept:      "settings unchanged",
 	TestVisionCheck:   "checking vision (images) support on model",
-	VisionOK:          "model successfully answered the image request:",
-	VisionConfirmed:   "vision support confirmed",
+	VisionOK:          "model answered the image request:",
+	VisionJudge:       "judge yourself whether it really saw the picture before saving",
 	VisionFail:        "model could NOT process the image",
 	AskSaveVision:     "save vision=%v for profile %s? [Y/n]: ",
+	TestModelCheck:    "checking model %s: tools, reasoning, vision...",
+	AskSaveModel:      "save use_tools, reasoning and vision into profile %s? [Y/n]: ",
 	YoloIsOn:          "YOLO mode: on (commands run without confirmation)",
 	YoloIsOff:         "YOLO mode: off (commands need confirmation)",
 	YoloGlobalOn:      "YOLO mode enabled globally",
@@ -367,6 +367,7 @@ usage:
   clank config test-tools               check tool calls support on the model
   clank config test-reasoning           check and calibrate reasoning support on the model
   clank config test-vision              check and save image (vision) support on the model
+  clank config test-model               all three checks at once with one save
   clank config allow-rm/allow-clear     commands that run without confirmation
 
   clank session show                    transcript of this terminal's session
@@ -413,6 +414,7 @@ each terminal tab has its own history; -r continues your own tab's`,
   test-tools                 check and (with confirmation) save use_tools
   test-reasoning             check and calibrate reasoning support
   test-vision                check and (with confirmation) save vision
+  test-model                 all three checks at once (tools, reasoning, vision)
   allow-rm <command>         stop running a command without confirmation
   allow-clear                clear the allowed commands list`,
 	ModelsHelp: `usage: clank models [filter]

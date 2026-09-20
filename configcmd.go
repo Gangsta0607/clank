@@ -251,6 +251,14 @@ func cmdConfig(args []string) int {
 		}
 		return cmdTestVision(&cf, name)
 
+	case "test-model":
+		name, _, err := activeProfile(&cf)
+		if err != nil {
+			fail("%v", err)
+			return exitConfig
+		}
+		return cmdTestModel(&cf, name)
+
 	case "allow-rm":
 		if len(args) < 2 {
 			fail(M.AllowNeedName)
@@ -548,20 +556,7 @@ func cmdTestReasoning(cf *ConfigFile, name string) int {
 	}
 
 	fmt.Println(M.ReasonResults)
-	if res.EffortOn != "" || res.EffortOff != "" {
-		fmt.Printf(M.ReasonEffortOK,
-			valueOr(res.EffortOn, M.ReasonNone), valueOr(res.EffortOff, M.ReasonNone))
-	} else if res.UsesBudget {
-		fmt.Println(M.ReasonBudgetOK)
-	} else {
-		fmt.Println(M.ReasonNoParams)
-	}
-
-	if res.HasOutput {
-		fmt.Println(M.ReasonHasOutput)
-	} else {
-		fmt.Println(M.ReasonNoOutput)
-	}
+	printReasoningResult(res)
 
 	supported := res.EffortOn != "" || res.EffortOff != "" || res.UsesBudget || res.HasOutput
 	if !supported {
@@ -585,26 +580,28 @@ func cmdTestReasoning(cf *ConfigFile, name string) int {
 		}
 		fmt.Println(M.SavedReasonOn)
 	} else {
-		if confirmYN(M.AskReasonOff, false) {
-			v := false
-			p.Reasoning = &v
-			if res.EffortOff != "" {
-				p.ReasoningEffort = res.EffortOff
-			}
-			if res.UsesBudget {
-				p.ReasoningBudget = res.BudgetOff
-			}
-			cf.Profiles[name] = p
-			if err := saveConfigFile(*cf); err != nil {
-				fail(M.SaveFail, err)
-				return exitConfig
-			}
-			fmt.Println(M.SavedReasonOff)
-		} else {
-			fmt.Println(M.SettingsKept)
-		}
+		fmt.Println(M.SettingsKept)
 	}
 	return exitOK
+}
+
+// printReasoningResult печатает итог проверки reasoning нейтрально:
+// что поддерживается и найден ли блок — без verdict'ов.
+func printReasoningResult(res reasoningTestResult) {
+	if res.EffortOn != "" || res.EffortOff != "" {
+		fmt.Printf(M.ReasonEffortOK,
+			valueOr(res.EffortOn, M.ReasonNone), valueOr(res.EffortOff, M.ReasonNone))
+	} else if res.UsesBudget {
+		fmt.Println(M.ReasonBudgetOK)
+	} else {
+		fmt.Println(M.ReasonNoParams)
+	}
+
+	if res.HasOutput {
+		fmt.Println(M.ReasonHasOutput)
+	} else {
+		fmt.Println(M.ReasonNoOutput)
+	}
 }
 
 func cmdTestVision(cf *ConfigFile, name string) int {
@@ -625,12 +622,91 @@ func cmdTestVision(cf *ConfigFile, name string) int {
 	}
 	if ok {
 		fmt.Println(M.VisionOK, sanitizeForDisplay(truncateRunes(detailText, 300)))
-		info(M.VisionConfirmed)
+		fmt.Println(M.VisionJudge)
 	} else {
 		fmt.Println(M.VisionFail)
 	}
 	if confirmYN(fmt.Sprintf(M.AskSaveVision, ok, name), true) {
 		p.Vision = &ok
+		cf.Profiles[name] = p
+		if err := saveConfigFile(*cf); err != nil {
+			fail(M.SaveFail, err)
+			return exitConfig
+		}
+		fmt.Println(M.SavedOK)
+	} else {
+		fmt.Println(M.SavedNot)
+	}
+	return exitOK
+}
+
+// cmdTestModel гоняет все три проверки разом (tools, reasoning, vision)
+// и сохраняет всё одним вопросом. Отчёты нейтральные: факты плюс ответ
+// модели, выводы — на пользователе.
+func cmdTestModel(cf *ConfigFile, name string) int {
+	p := cf.Profiles[name]
+	if err := p.validate(); err != nil {
+		fail("%v", err)
+		return exitConfig
+	}
+
+	model := p.Models[0]
+	fmt.Printf(M.TestModelCheck+"\n", model)
+
+	sp := startSpinner(M.WaitingAnswer)
+	toolsOK, toolsDetail, err := testToolSupport(p, model)
+	sp.stopSpinner()
+	if err != nil {
+		fail("%v", err)
+		return exitAPI
+	}
+	if toolsOK {
+		fmt.Println(M.ToolCalled, sanitizeForDisplay(truncateRunes(toolsDetail, 300)))
+	} else {
+		fmt.Println(M.ToolNotCalled, truncateRunes(toolsDetail, 300))
+	}
+
+	sp = startSpinner(M.TestingParams)
+	rres, err := testReasoningSupport(p, model)
+	sp.stopSpinner()
+	if err != nil {
+		fail("%v", err)
+		return exitAPI
+	}
+	printReasoningResult(rres)
+	reasonOK := rres.EffortOn != "" || rres.EffortOff != "" || rres.UsesBudget || rres.HasOutput
+
+	sp = startSpinner(M.WaitingAnswer)
+	visOK, visDetail, err := testVisionSupport(p, model)
+	sp.stopSpinner()
+	if err != nil {
+		fail("%v", err)
+		return exitAPI
+	}
+	if visOK {
+		fmt.Println(M.VisionOK, sanitizeForDisplay(truncateRunes(visDetail, 300)))
+		fmt.Println(M.VisionJudge)
+	} else {
+		fmt.Println(M.VisionFail)
+	}
+
+	if len(p.Models) > 1 {
+		info(M.ChainFirstOnly)
+	}
+
+	if confirmYN(fmt.Sprintf(M.AskSaveModel, name), true) {
+		p.UseTools = toolsOK
+		p.Vision = &visOK
+		if reasonOK {
+			v := true
+			p.Reasoning = &v
+			if rres.EffortOn != "" {
+				p.ReasoningEffort = rres.EffortOn
+			}
+			if rres.UsesBudget {
+				p.ReasoningBudget = rres.BudgetOn
+			}
+		}
 		cf.Profiles[name] = p
 		if err := saveConfigFile(*cf); err != nil {
 			fail(M.SaveFail, err)

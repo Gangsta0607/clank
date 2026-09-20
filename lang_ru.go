@@ -133,22 +133,22 @@ var RU = Msgs{
 	TestingParams:     "тестирую параметры",
 	ReasonResults:     "\nрезультаты проверки:",
 	ReasonNone:        "нет",
-	ReasonEffortOK:    "  управление reasoning_effort: поддерживается (включение: %s, выключение: %s)",
+	ReasonEffortOK:    "  управление reasoning_effort: поддерживается (включение: %s, выключение: %s)\n",
 	ReasonBudgetOK:    "  управление бюджетом токенов: поддерживается (reasoning_budget)",
 	ReasonNoParams:    "  параметры управления reasoning: не поддерживаются сервером",
-	ReasonHasOutput:   "  генерация рассуждений (reasoning_content / <think>): ДА",
-	ReasonNoOutput:    "  генерация рассуждений: не обнаружена (модель отвечает сразу)",
+	ReasonHasOutput:   "  блок reasoning: найден",
+	ReasonNoOutput:    "  блок reasoning: не найден",
 	ReasonUnsupported: "эта модель не использует и не настраивает reasoning",
 	AskReasonOn:       "\nвключить reasoning для профиля %s? [Y/n]: ",
 	SavedReasonOn:     "сохранено (reasoning: включён)",
-	AskReasonOff:      "отключить reasoning принудительно? [y/N]: ",
-	SavedReasonOff:    "сохранено (reasoning: выключен)",
 	SettingsKept:      "настройки не изменены",
 	TestVisionCheck:   "проверяю поддержку vision (изображений) на модели",
-	VisionOK:          "модель успешно ответила на запрос с изображением:",
-	VisionConfirmed:   "поддержка vision подтверждена",
+	VisionOK:          "модель ответила на запрос с изображением:",
+	VisionJudge:       "реши сам, увидела ли она картинку, прежде чем сохранять",
 	VisionFail:        "модель НЕ смогла обработать изображение",
 	AskSaveVision:     "сохранить vision=%v для профиля %s? [Y/n]: ",
+	TestModelCheck:    "проверяю модель %s: tools, reasoning, vision...",
+	AskSaveModel:      "сохранить use_tools, reasoning и vision в профиль %s? [Y/n]: ",
 	YoloIsOn:          "режим YOLO: включён (команды выполняются без подтверждения)",
 	YoloIsOff:         "режим YOLO: выключен (требуется подтверждение команд)",
 	YoloGlobalOn:      "режим YOLO включён глобально",
@@ -366,6 +366,7 @@ reasoning, vision) с общим итогом. Один вопрос — сох�
   clank config test-tools               проверить поддержку tool calls моделью
   clank config test-reasoning           проверить и откалибровать поддержку reasoning моделью
   clank config test-vision              проверить и сохранить поддержку изображений (vision) моделью
+  clank config test-model               все три проверки разом с одним сохранением
   clank config allow-rm/allow-clear     список команд, выполняемых без подтверждения
 
   clank session show                    транскрипт сессии этого терминала
@@ -412,6 +413,7 @@ reasoning, vision) с общим итогом. Один вопрос — сох�
   test-tools                 проверить и (с подтверждением) сохранить use_tools
   test-reasoning             проверить и откалибровать поддержку reasoning
   test-vision                проверить и (с подтверждением) сохранить vision
+  test-model                 все три проверки разом (tools, reasoning, vision)
   allow-rm <команда>         убрать команду из разрешённых без подтверждения
   allow-clear                очистить список разрешённых команд`,
 	ModelsHelp: `использование: clank models [фильтр]

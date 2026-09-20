@@ -197,14 +197,14 @@ type Msgs struct {
 	ReasonUnsupported string
 	AskReasonOn       string
 	SavedReasonOn     string
-	AskReasonOff      string
-	SavedReasonOff    string
 	SettingsKept      string
 	TestVisionCheck   string
 	VisionOK          string
-	VisionConfirmed   string
+	VisionJudge       string
 	VisionFail        string
 	AskSaveVision     string
+	TestModelCheck    string
+	AskSaveModel      string
 	YoloIsOn          string
 	YoloIsOff         string
 	YoloGlobalOn      string
