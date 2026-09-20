@@ -60,7 +60,7 @@ func warn(format string, a ...any) {
 }
 
 func fail(format string, a ...any) {
-	fmt.Fprintf(os.Stderr, "ошибка: "+format+"\n", a...)
+	fmt.Fprintf(os.Stderr, M.FailPrefix+format+"\n", a...)
 }
 
 // --- индикатор ожидания ---

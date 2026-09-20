@@ -92,7 +92,7 @@ func confirmYN(prompt string, defaultYes bool) bool {
 		case "n", "no", "н", "нет":
 			return false
 		default:
-			fmt.Fprintln(f, "не понял: y — да, n — нет")
+			fmt.Fprintln(f, M.ConfirmHint)
 		}
 	}
 }
@@ -113,17 +113,17 @@ const (
 func confirmCommand(cmdStr, name string, level TrustLevel) answer {
 	f, rd, err := ttyIO()
 	if err != nil {
-		warn("нет управляющего терминала — подтвердить выполнение невозможно, отказываю")
+		warn(M.NoTTYDecline)
 		return ansNo
 	}
 
-	fmt.Fprintf(f, "\nмодель хочет выполнить:\n%s\n", indentBlock(sanitizeForDisplay(cmdStr), "    "))
+	fmt.Fprintf(f, M.ModelWantsRun, indentBlock(sanitizeForDisplay(cmdStr), "    "))
 	var prompt string
 	if level == TrustSimple {
-		fmt.Fprintf(f, "  («%s» разрешена только для простых команд, но эта команда содержит спецсимволы шелла — подтверди вручную)\n", name)
-		prompt = fmt.Sprintf("выполнить? [y/N/a] (a — разрешать «%s» всегда, включая сложные): ", name)
+		fmt.Fprintf(f, M.ComplexWarn, name)
+		prompt = fmt.Sprintf(M.RunPromptAll, name)
 	} else {
-		prompt = fmt.Sprintf("выполнить? [y/N/a] (a — разрешать «%s» всегда): ", name)
+		prompt = fmt.Sprintf(M.RunPrompt, name)
 	}
 
 	for {
@@ -143,7 +143,7 @@ func confirmCommand(cmdStr, name string, level TrustLevel) answer {
 		case "a", "always", "в", "всегда":
 			return ansAlways
 		default:
-			fmt.Fprintln(f, "не понял: y — выполнить, n — отказать, a — разрешать эту команду всегда")
+			fmt.Fprintln(f, M.ConfirmCMD)
 		}
 	}
 }
@@ -154,7 +154,7 @@ func promptQuestion(q string, options []string, defVal string) (string, bool) {
 	f, rd, err := ttyIO()
 	if err != nil {
 		if defVal != "" {
-			info("нет управляющего терминала — выбираю значение по умолчанию: %s", defVal)
+			info(M.NoTTYDefault, defVal)
 			if len(options) > 0 {
 				if n, err := strconv.Atoi(defVal); err == nil && n >= 1 && n <= len(options) {
 					return options[n-1], true
@@ -162,7 +162,7 @@ func promptQuestion(q string, options []string, defVal string) (string, bool) {
 			}
 			return defVal, true
 		}
-		warn("нет управляющего терминала — ответить на вопрос невозможно")
+		warn(M.NoTTYNoAnswer)
 		return "", false
 	}
 
@@ -181,13 +181,13 @@ func promptQuestion(q string, options []string, defVal string) (string, bool) {
 	var prompt string
 	switch {
 	case len(options) > 0 && defDisplay != "":
-		prompt = fmt.Sprintf("выбери 1-%d или напиши свой ответ [%s]: ", len(options), defDisplay)
+		prompt = fmt.Sprintf(M.ChooseOrDef, len(options), defDisplay)
 	case len(options) > 0:
-		prompt = fmt.Sprintf("выбери 1-%d или напиши свой ответ: ", len(options))
+		prompt = fmt.Sprintf(M.ChooseOrType, len(options))
 	case defDisplay != "":
-		prompt = fmt.Sprintf("ответ [%s]: ", defDisplay)
+		prompt = fmt.Sprintf(M.AnswerOrDef, defDisplay)
 	default:
-		prompt = "ответ: "
+		prompt = M.AnswerIs
 	}
 
 	for {
@@ -210,7 +210,7 @@ func promptQuestion(q string, options []string, defVal string) (string, bool) {
 			if len(options) == 0 {
 				return "", true
 			}
-			fmt.Fprintln(f, "введи номер варианта или свой ответ")
+			fmt.Fprintln(f, M.EnterNum)
 			continue
 		}
 

@@ -62,20 +62,20 @@ func cmdUpdate(args []string) int {
 
 	execPath, err := os.Executable()
 	if err != nil {
-		fail("не удалось определить путь к текущему бинарнику: %v", err)
+		fail(M.UpdBinFail, err)
 		return exitConfig
 	}
 	execPath, err = filepath.EvalSymlinks(execPath)
 	if err != nil {
-		fail("не удалось разрешить симлинк бинарника: %v", err)
+		fail(M.UpdLinkFail, err)
 		return exitConfig
 	}
 
-	sp := startSpinner("проверяю обновления на GitHub")
+	sp := startSpinner(M.UpdChecking)
 	rel, err := fetchLatestRelease()
 	sp.stopSpinner()
 	if err != nil {
-		fail("не удалось проверить обновления: %v", err)
+		fail(M.UpdCheckErr, err)
 		return exitAPI
 	}
 
@@ -95,21 +95,21 @@ func cmdUpdate(args []string) int {
 	}
 
 	if normLatest == normCurrent && !hasCache {
-		fmt.Printf("clank %s уже последней версии\n", currentVer)
+		fmt.Printf(M.UpdLatest, currentVer)
 		return exitOK
 	}
 
-	fmt.Printf("Доступна новая версия: %s (текущая: %s)\n", latestVer, currentVer)
+	fmt.Printf(M.UpdAvail, latestVer, currentVer)
 	if strings.TrimSpace(rel.Body) != "" {
-		fmt.Printf("\nИзменения в релизе:\n%s\n\n", indentBlock(truncateRunes(rel.Body, 1000), "  "))
+		fmt.Printf(M.UpdNotes, indentBlock(truncateRunes(rel.Body, 1000), "  "))
 	}
 
 	if hasCache {
-		info("найден ранее скачанный бинарник в кэше: %s", cacheFile)
+		info(M.UpdCached, cacheFile)
 	}
 
-	if !autoYes && !confirmYN(fmt.Sprintf("обновить %s до %s? [Y/n]: ", execPath, latestVer), true) {
-		fmt.Println("обновление отменено")
+	if !autoYes && !confirmYN(fmt.Sprintf(M.UpdAsk, execPath, latestVer), true) {
+		fmt.Println(M.UpdAbort)
 		return exitOK
 	}
 
@@ -117,7 +117,7 @@ func cmdUpdate(args []string) int {
 	if hasCache {
 		newBinData, err = os.ReadFile(cacheFile)
 		if err != nil {
-			warn("не удалось прочитать кэш: %v, скачиваю заново", err)
+			warn(M.UpdCacheErr, err)
 			hasCache = false
 		}
 	}
@@ -129,32 +129,32 @@ func cmdUpdate(args []string) int {
 			return exitConfig
 		}
 
-		sp = startSpinner(fmt.Sprintf("скачиваю %s", assetName))
+		sp = startSpinner(fmt.Sprintf(M.UpdDown, assetName))
 		archiveData, err := downloadAsset(assetURL)
 		sp.stopSpinner()
 		if err != nil {
-			fail("не удалось скачать релиз: %v", err)
+			fail(M.UpdDownErr, err)
 			return exitAPI
 		}
 
 		newBinData, err = extractBinary(archiveData, isZip)
 		if err != nil {
-			fail("не удалось распаковать бинарник: %v", err)
+			fail(M.UpdUnpErr, err)
 			return exitConfig
 		}
 
 		if cacheFile != "" {
 			if err := os.WriteFile(cacheFile, newBinData, 0755); err == nil {
-				detail("сохранён в кэш: %s", cacheFile)
+				detail(M.UpdKept, cacheFile)
 			}
 		}
 	}
 
 	// Попытка применить обновление
 	if err := applyUpdate(execPath, newBinData); err != nil {
-		fail("ошибка при установке обновления в %s: %v", execPath, err)
+		fail(M.UpdApplyErr, execPath, err)
 		if cacheFile != "" {
-			fmt.Printf("\nБинарник сохранён в кэше. Если проблема в правах доступа, запустите:\n  sudo clank update\n")
+			fmt.Printf(M.UpdSudoHint)
 		}
 		return exitConfig
 	}
@@ -164,7 +164,7 @@ func cmdUpdate(args []string) int {
 		_ = os.Remove(cacheFile)
 	}
 
-	fmt.Printf("clank успешно обновлён до %s!\n", latestVer)
+	fmt.Printf(M.UpdDone, latestVer)
 	return exitOK
 }
 
@@ -212,7 +212,7 @@ func findMatchingAsset(rel githubRelease) (url, name string, isZip bool, err err
 		}
 	}
 
-	return "", "", false, fmt.Errorf("не найден подходящий архив для платформы %s/%s в релизе %s",
+	return "", "", false, fmt.Errorf(M.UpdNoAsset,
 		targetOS, targetArch, rel.TagName)
 }
 
@@ -254,7 +254,7 @@ func extractBinary(archiveData []byte, isZip bool) ([]byte, error) {
 				return io.ReadAll(rc)
 			}
 		}
-		return nil, fmt.Errorf("исполняемый файл clank.exe не найден внутри zip архива")
+		return nil, fmt.Errorf(M.UpdNoExeZip)
 	}
 
 	gr, err := gzip.NewReader(bytes.NewReader(archiveData))
@@ -278,7 +278,7 @@ func extractBinary(archiveData []byte, isZip bool) ([]byte, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("исполняемый файл clank не найден внутри tar.gz архива")
+	return nil, fmt.Errorf(M.UpdNoExeTar)
 }
 
 func applyUpdate(targetPath string, newBinary []byte) error {

@@ -14,7 +14,7 @@ Works with any OpenAI-compatible API: cloud providers, local Ollama / LocalAI / 
 
 ## What it can do
 
-- Answers questions in plain text, no markdown garbage (well, it tries).
+- Answers questions in plain text, no markdown garbage (depends on used model).
 - Reads context from a pipe: logs, diffs, output of any commands.
 - Remembers the conversation within the terminal tab — `clank -r "now this way"`.
 - Can run commands itself to figure things out.
@@ -24,8 +24,8 @@ Works with any OpenAI-compatible API: cloud providers, local Ollama / LocalAI / 
 
 ## Installation
 
-Ready-made builds are on the releases page: https://github.com/Gangsta0607/clank/releases
-
+Release builds are on the releases page: https://github.com/Gangsta0607/clank/releases
+Put it in your PATH and you're good to go.
 
 ## Install from source
 

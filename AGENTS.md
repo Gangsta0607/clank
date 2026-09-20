@@ -37,6 +37,9 @@ All code is in package `main` (single package, flat directory). No subdirectorie
 | `client.go`     | HTTP client, OpenAI-compatible API types, retry/fallback    |
 | `config.go`     | Config file load/save, profile management, allowed-commands |
 | `configcmd.go`  | `clank config *` and `clank models` subcommands             |
+| `lang.go`       | Language tables switch, locale detect, `clank language`     |
+| `lang_ru.go`    | Russian UI strings (`RU` table)                             |
+| `lang_en.go`    | English UI strings (`EN` table)                             |
 | `exec.go`       | Shell execution, output capping, command vetting            |
 | `exec_*.go`     | Platform-specific shell execution (Unix/Windows)            |
 | `lifecycle.go`  | `purge`, `uninstall`, and `nuke` commands                   |
@@ -61,6 +64,9 @@ os.Args[1] → switch:
   "models"  → cmdModels(rest)
   "config"  → cmdConfig(rest)
   "session" → cmdSession(rest)
+  "yolo"    → cmdYolo(rest)
+  "language"→ cmdLanguage(rest)
+  "update" / "purge" / "uninstall" / "nuke" → lifecycle
   "version" → print version
   default   → cmdAsk(os.Args[1:])   ← the common path
 ```
@@ -202,7 +208,11 @@ Reasoning can be toggled via `clank config set-reasoning on|off` or `--reasoning
 
 ### Tool definition
 
-Three tools are registered: `run_shell_command`, `question`, and `view_image`. Their JSON schemas are hardcoded. The system prompt instructs the model on how to use them.
+Three tools are registered: `run_shell_command`, `question`, and `view_image`.
+Their JSON schemas are hardcoded **in English and never localized** — small
+models parse EN schemas more reliably, and EN schema + RU prompt is fine.
+`view_image` is dropped from the request when `profile.Vision == false`
+(see `requestTools`). The system prompt instructs the model on policy.
 
 ---
 
@@ -220,6 +230,7 @@ ConfigFile {
     Profiles map[string]Profile
     Allowed  map[string]TrustLevel // command names with trust levels ("simple" or "all")
     Yolo     bool                  // global YOLO mode (bypass all prompts)
+    Language string                // "ru", "en", "" = auto-detect (clank language)
 }
 ```
 
@@ -233,6 +244,7 @@ Profile {
     Model          string    // legacy compat mirror of Models[0]
     Proxy          string    // explicit proxy; empty = use HTTP_PROXY/HTTPS_PROXY env
     UseTools       bool      // whether to include tool definition in API requests
+    Vision         *bool     // nil = untested (assume yes); set by `clank config test-vision`
     ExecTimeoutSec int       // 0 = defaultExecTimeout (10 min)
     Created        string    // RFC3339, used for auto-selection when Active is stale
 }
@@ -321,22 +333,45 @@ Runs at the start of every `cmdAsk`. Removes session files older than `sessionMa
 
 ## System prompt (`systemprompt.go`)
 
-### `buildSystemPrompt(useTools bool) string`
+### `buildSystemPrompt(useTools bool, vision bool) string`
 
-Rebuilt every invocation. Contains:
-- Current working directory
-- Hostname
-- Current date (minute precision)
-- Detected shell (via `ps -p <ppid> -o comm=`, falls back to `$SHELL`)
-- OS/arch (`runtime.GOOS/GOARCH`)
-- Explicit "no markdown" instruction (no `**`, `###`, triple backticks, bullet `*`)
-- Tool usage instructions if `useTools == true`, else "suggest a one-liner pipe to clank -r"
+Rebuilt every invocation, composed from capability blocks — no conditionals
+in the text itself. `vision` is `profile.Vision != false` (nil = untested,
+assume yes). Follows the UI language (RU/EN tables), so the model replies
+in the user's language. Contains:
+- Role: terminal assistant (answers, error triage, task execution)
+- Answer rules: short, user's language, explicit "no markdown" instruction
+  (no `**`, `###`, triple backticks, bullet `*`)
+- Current working directory, hostname, date, detected shell, OS/arch
+- Session-history note (`-r` continuation is part of the same session)
+- If tools: work policy (act via tools, self-serve missing data via
+  `run_shell_command`, `question` only for real forks, never announce calls,
+  destructive only on explicit request or via `question` with consequences).
+  The `view_image` paragraph only when `vision` is true.
+- If no tools: "suggest a one-liner pipe to clank -r"
+
+The tool list itself is NOT enumerated — schemas are already in the request
+(see below). The prompt carries policy (when/why), schemas carry mechanics.
 
 The no-markdown rule is critical: the terminal doesn't render markdown, it just prints the asterisks.
 
 ### `detectShell`
 
 Uses `ps -p <ppid>` to find the actual current shell, not `$SHELL` (which reflects the login shell, not the currently running one). Works on both Linux and macOS without `/proc`.
+
+---
+
+## Localization (`lang.go`, `lang_ru.go`, `lang_en.go`)
+
+All user-visible strings live in `Msgs` tables (`RU`, `EN`); code uses `M.Field`.
+New language = new `lang_xx.go` table + one branch in `applyLang` — the compiler
+flags missing fields. Tool JSON schemas stay English (see above).
+
+- `initLang()` runs first in `main()`: explicit `ConfigFile.Language` wins,
+  otherwise `detectLang()` reads `LC_ALL` → `LC_MESSAGES` → `LANG`
+  (first non-empty decides; `ru*` → RU, anything else incl. C/POSIX → EN).
+- `clank language [en|ru|auto]` shows or sets the override.
+- `config show` prints the language line; `config test-vision` saves `Vision`.
 
 ---
 

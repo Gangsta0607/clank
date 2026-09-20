@@ -19,7 +19,7 @@ const (
 func readStdin() string {
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		warn("не смог дочитать stdin: %v — контекст может быть неполным", err)
+		warn(M.StdinReadFail, err)
 	}
 	return strings.TrimRight(string(data), "\n")
 }
@@ -56,7 +56,7 @@ func cmdAsk(args []string) int {
 			return exitOK
 		case a == "-i" || a == "--image":
 			if i+1 >= len(args) {
-				fail("флагу %s нужен путь к файлу изображения", a)
+				fail(M.ImageFlagNeeds, a)
 				return exitConfig
 			}
 			i++
@@ -77,15 +77,15 @@ func cmdAsk(args []string) int {
 			reasonFlag = &v
 		default:
 			if strings.HasPrefix(a, "--yolo=") {
-				fail("неверное значение флага --yolo: %s (ожидается on или off)", a)
+				fail(M.BadYoloFlag, a)
 				return exitConfig
 			}
 			if strings.HasPrefix(a, "--reasoning=") {
-				fail("неверное значение флага --reasoning: %s (ожидается on или off)", a)
+				fail(M.BadReasonFlag, a)
 				return exitConfig
 			}
 			if strings.HasPrefix(a, "-") && len(a) > 1 {
-				fail("неизвестный флаг: %s (если это часть вопроса — поставь перед ним --)", a)
+				fail(M.UnknownFlag, a)
 				return exitConfig
 			}
 			rest = append(rest, a)
@@ -94,8 +94,8 @@ func cmdAsk(args []string) int {
 
 	question := strings.Join(rest, " ")
 	if strings.TrimSpace(question) == "" {
-		fail("нечего спрашивать")
-		fmt.Fprintln(os.Stderr, `использование: clank [-c] [-r] [-v|-q] <вопрос>`)
+		fail(M.NothingToAsk)
+		fmt.Fprintln(os.Stderr, M.AskUsage)
 		return exitConfig
 	}
 
@@ -116,23 +116,23 @@ func cmdAsk(args []string) int {
 	if reasonFlag != nil {
 		profile.Reasoning = reasonFlag
 	}
-	detail("профиль %s, модели: %s", profileName, strings.Join(profile.Models, " → "))
+	detail(M.ProfileDetail, profileName, strings.Join(profile.Models, " → "))
 
 	gcSessions()
 
 	var context string
 	if wantContext && isTTY(os.Stdin) {
 		// Иначе выглядит как зависание: программа молча ждёт EOF.
-		info("читаю stdin, Ctrl-D когда закончишь")
+		info(M.ReadingStdin)
 	}
 	if wantContext || !isTTY(os.Stdin) {
 		context = readStdin()
-		detail("контекст из stdin: %d байт", len(context))
+		detail(M.StdinBytes, len(context))
 	}
 
 	userContent := question
 	if context != "" {
-		userContent = fmt.Sprintf("Контекст:\n%s\n\nВопрос: %s", context, question)
+		userContent = fmt.Sprintf(M.ContextWrap, context, question)
 	}
 
 	var (
@@ -151,7 +151,7 @@ func cmdAsk(args []string) int {
 		effectiveYolo = *yoloFlag
 	}
 
-	sysMsg := chatMessage{Role: "system", Content: buildSystemPrompt(profile.UseTools)}
+	sysMsg := chatMessage{Role: "system", Content: buildSystemPrompt(profile.UseTools, profile.Vision == nil || *profile.Vision)}
 	var userMsg chatMessage
 	if len(imagePaths) > 0 {
 		parts := []contentPart{
@@ -167,7 +167,7 @@ func cmdAsk(args []string) int {
 				Type:     "image_url",
 				ImageURL: &imageURL{URL: dataURL},
 			})
-			detail("прикреплено изображение %s (%d байт data-uri)", imgPath, len(dataURL))
+			detail(M.ImageAttached, imgPath, len(dataURL))
 		}
 		userMsg = chatMessage{Role: "user", Content: parts}
 	} else {
@@ -192,7 +192,7 @@ func cmdAsk(args []string) int {
 	// команд, и -r восстанавливает состояние «до начала».
 	finish := func(code int) int {
 		if err := saveSession(profileName, turnMessages, &effectiveYolo); err != nil {
-			warn("не смог сохранить сессию: %v", err)
+			warn(M.SessionSaveErr, err)
 		}
 		return code
 	}
@@ -205,14 +205,14 @@ func cmdAsk(args []string) int {
 
 loop:
 	for i := 0; ; i++ {
-		sp := startSpinner("думаю")
+		sp := startSpinner(M.Thinking)
 		res, err := chatWithFallback(profile, messages, profile.UseTools)
 		sp.stopSpinner()
 		if err != nil {
 			fail("%v", err)
 			return finish(exitAPI)
 		}
-		detail("шаг %d: ответила %s, finish_reason=%s", i+1, res.model, valueOr(res.finishReason, "-"))
+		detail(M.StepDetail, i+1, res.model, valueOr(res.finishReason, "-"))
 
 		messages = append(messages, res.msg)
 		turnMessages = append(turnMessages, res.msg)
@@ -244,19 +244,19 @@ loop:
 	}
 
 	if finishReason == "length" {
-		warn("ответ обрезан сервером по лимиту токенов — переспроси короче или задай вопрос по частям")
+		warn(M.AnswerCut)
 	}
 
 	code := exitOK
 	switch result {
 	case outcomeInterrupted:
-		info("прервано (Ctrl-C)")
+		info(M.Interrupted)
 		if strings.TrimSpace(final) == "" {
-			final = "(выполнение прервано)"
+			final = M.OutcomeIntr
 		}
 		code = exitDeclined
 	case outcomeEmpty:
-		final = "(модель вернула пустой ответ)"
+		final = M.OutcomeEmpty
 		code = exitNoAnswer
 	}
 
@@ -291,9 +291,9 @@ func runToolCall(cf *ConfigFile, p Profile, tc toolCall, yolo bool) (chatMessage
 	case viewImageToolName:
 		return runViewImageToolCall(tc, mk)
 	default:
-		warn("модель просит неизвестный инструмент %q — не выполняю",
+		warn(M.UnknownTool,
 			sanitizeForDisplay(tc.Function.Name))
-		return mk(fmt.Sprintf("ошибка: инструмента %q не существует, доступны: %s, %s, %s",
+		return mk(fmt.Sprintf(M.NoSuchTool,
 			tc.Function.Name, shellToolName, questionToolName, viewImageToolName)), nil, verdictInvalid
 	}
 }
@@ -304,8 +304,8 @@ func runViewImageToolCall(tc toolCall, mk func(string) chatMessage) (chatMessage
 		File string `json:"file"`
 	}
 	if err := json.Unmarshal([]byte(tc.Function.Arguments), &parsedArgs); err != nil {
-		warn("аргументы просмотра изображения не разобрать: %v", err)
-		return mk(fmt.Sprintf("ошибка: аргументы должны быть JSON вида {\"path\": \"...\"}, разбор не удался: %v", err)), nil, verdictInvalid
+		warn(M.ViewArgsBad, err)
+		return mk(fmt.Sprintf(M.ViewArgsNeed, err)), nil, verdictInvalid
 	}
 
 	imgPath := strings.TrimSpace(parsedArgs.Path)
@@ -313,22 +313,22 @@ func runViewImageToolCall(tc toolCall, mk func(string) chatMessage) (chatMessage
 		imgPath = strings.TrimSpace(parsedArgs.File)
 	}
 	if imgPath == "" {
-		warn("модель прислала пустой путь к изображению")
-		return mk("ошибка: поле path пустое"), nil, verdictInvalid
+		warn(M.ViewEmptyPath)
+		return mk(M.ViewPathEmpty), nil, verdictInvalid
 	}
 
-	info("· смотрю %s", sanitizeForDisplay(imgPath))
+	info(M.ViewWatch, sanitizeForDisplay(imgPath))
 	dataURL, err := encodeImageFile(imgPath)
 	if err != nil {
-		warn("не удалось открыть изображение %s: %v", imgPath, err)
-		return mk(fmt.Sprintf("ошибка при чтении изображения %s: %v", imgPath, err)), nil, verdictInvalid
+		warn(M.ViewOpenFail, imgPath, err)
+		return mk(fmt.Sprintf(M.ViewReadFail, imgPath, err)), nil, verdictInvalid
 	}
 
-	toolMsg := mk(fmt.Sprintf("Изображение %s успешно загружено.", imgPath))
+	toolMsg := mk(fmt.Sprintf(M.ViewLoaded, imgPath))
 	followUp := &chatMessage{
 		Role: "user",
 		Content: []contentPart{
-			{Type: "text", Text: fmt.Sprintf("Содержимое изображения %s:", imgPath)},
+			{Type: "text", Text: fmt.Sprintf(M.ViewContent, imgPath)},
 			{Type: "image_url", ImageURL: &imageURL{URL: dataURL}},
 		},
 	}
@@ -344,8 +344,8 @@ func runQuestionToolCall(tc toolCall, mk func(string) chatMessage) (chatMessage,
 		Default  string   `json:"default"`
 	}
 	if err := json.Unmarshal([]byte(tc.Function.Arguments), &qArgs); err != nil {
-		warn("аргументы вопроса не разобрать: %v", err)
-		return mk(fmt.Sprintf("ошибка: аргументы вопроса должны быть JSON вида {\"question\": \"...\"}, разбор не удался: %v", err)), verdictInvalid
+		warn(M.AskArgsBad, err)
+		return mk(fmt.Sprintf(M.AskArgsNeed, err)), verdictInvalid
 	}
 
 	qText := strings.TrimSpace(qArgs.Question)
@@ -356,16 +356,16 @@ func runQuestionToolCall(tc toolCall, mk func(string) chatMessage) (chatMessage,
 		qText = strings.TrimSpace(qArgs.Text)
 	}
 	if qText == "" {
-		warn("модель прислала пустой вопрос")
-		return mk("ошибка: поле question пустое"), verdictInvalid
+		warn(M.AskEmptyQ)
+		return mk(M.AskQEmpty), verdictInvalid
 	}
 
 	ans, ok := promptQuestion(qText, qArgs.Options, strings.TrimSpace(qArgs.Default))
 	if !ok {
 		if !haveTTY() && qArgs.Default == "" {
-			return mk("ошибка: нет управляющего терминала для ответа на вопрос"), verdictInvalid
+			return mk(M.AskNoTTY), verdictInvalid
 		}
-		return mk("пользователь отменил ввод (Ctrl-C / EOF)"), verdictInterrupted
+		return mk(M.AskCancelled), verdictInterrupted
 	}
 
 	return mk(ans), verdictOK
@@ -376,14 +376,14 @@ func runShellToolCall(cf *ConfigFile, p Profile, tc toolCall, yolo bool, mk func
 		Command string `json:"command"`
 	}
 	if err := json.Unmarshal([]byte(tc.Function.Arguments), &parsedArgs); err != nil {
-		warn("аргументы инструмента не разобрать: %v", err)
-		return mk(fmt.Sprintf("ошибка: аргументы должны быть JSON вида {\"command\": \"...\"}, разбор не удался: %v", err)), verdictInvalid
+		warn(M.ShellArgsBad, err)
+		return mk(fmt.Sprintf(M.ShellArgsNeed, err)), verdictInvalid
 	}
 
 	cmdStr := strings.TrimSpace(parsedArgs.Command)
 	if cmdStr == "" {
-		warn("модель прислала пустую команду — не выполняю")
-		return mk("ошибка: поле command пустое, команда не выполнялась"), verdictInvalid
+		warn(M.ShellEmpty)
+		return mk(M.ShellCmdEmpty), verdictInvalid
 	}
 
 	name := commandName(cmdStr)
@@ -391,15 +391,15 @@ func runShellToolCall(cf *ConfigFile, p Profile, tc toolCall, yolo bool, mk func
 	trust := cf.trustLevel(name)
 
 	if yolo {
-		info("выполняю без вопроса (режим YOLO): %s", sanitizeForDisplay(cmdStr))
+		info(M.RunYolo, sanitizeForDisplay(cmdStr))
 	} else if trust == TrustAll {
-		info("выполняю без вопроса (%s разрешена всегда): %s", name, sanitizeForDisplay(cmdStr))
+		info(M.RunAlways, name, sanitizeForDisplay(cmdStr))
 	} else if trust == TrustSimple && simple {
-		info("выполняю без вопроса (%s разрешена для простых команд): %s", name, sanitizeForDisplay(cmdStr))
+		info(M.RunSimple, name, sanitizeForDisplay(cmdStr))
 	} else {
 		switch confirmCommand(cmdStr, name, trust) {
 		case ansNo:
-			return mk("пользователь отказался выполнять эту команду"), verdictDeclined
+			return mk(M.UserDeclined), verdictDeclined
 		case ansAlways:
 			level := TrustSimple
 			if !simple {
@@ -407,12 +407,12 @@ func runShellToolCall(cf *ConfigFile, p Profile, tc toolCall, yolo bool, mk func
 			}
 			cf.allow(name, level)
 			if err := saveConfigFile(*cf); err != nil {
-				warn("не смог сохранить список разрешённых: %v", err)
+				warn(M.AllowSaveFail, err)
 			} else {
 				if level == TrustAll {
-					info("%s теперь разрешена всегда, включая сложные команды (убрать: clank config allow-rm %s)", name, name)
+					info(M.AllowAll, name, name)
 				} else {
-					info("%s добавлена в разрешённые для простых команд (убрать: clank config allow-rm %s)", name, name)
+					info(M.AllowSimple, name, name)
 				}
 			}
 		}
@@ -421,16 +421,16 @@ func runShellToolCall(cf *ConfigFile, p Profile, tc toolCall, yolo bool, mk func
 	// Маркеры в stderr, сам вывод команды — в stdout: при `clank ... > файл`
 	// вывод выполненных команд считается такой же частью результата, как
 	// и ответ модели.
-	fmt.Fprintln(os.Stderr, "--- вывод ---")
+	fmt.Fprintln(os.Stderr, M.OutputMark)
 	res := execShell(cmdStr, p.execTimeout())
 	fmt.Fprintf(os.Stderr, "--- exit %d ---\n", res.exitCode)
 
 	var b strings.Builder
 	switch {
 	case res.interrupted:
-		b.WriteString("команда прервана пользователем (Ctrl-C)\n")
+		b.WriteString(M.CmdInterrupted)
 	case res.timedOut:
-		b.WriteString("команда снята по таймауту\n")
+		b.WriteString(M.CmdTimedOut)
 	}
 	fmt.Fprintf(&b, "exit code: %d\n%s", res.exitCode, res.output)
 

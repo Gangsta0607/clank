@@ -42,21 +42,21 @@ func cmdPurge(args []string) int {
 	}
 
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		fmt.Println("конфигурационный каталог и данные уже пусты")
+		fmt.Println(M.PurgeEmpty)
 		return exitOK
 	}
 
-	if !autoYes && !confirmYN(fmt.Sprintf("очистить все настройки, сессии и данные (%s)? [y/N]: ", dir), false) {
-		fmt.Println("отменено")
+	if !autoYes && !confirmYN(fmt.Sprintf(M.PurgeAsk, dir), false) {
+		fmt.Println(M.Aborted)
 		return exitOK
 	}
 
 	if err := os.RemoveAll(dir); err != nil {
-		fail("ошибка при очистке данных (%s): %v", dir, err)
+		fail(M.PurgeFail, dir, err)
 		return exitConfig
 	}
 
-	fmt.Println("все пользовательские данные и настройки clank очищены")
+	fmt.Println(M.PurgeDone)
 	return exitOK
 }
 
@@ -70,21 +70,21 @@ func cmdUninstall(args []string) int {
 
 	execPath, err := getExecPath()
 	if err != nil {
-		fail("не удалось определить путь к бинарнику: %v", err)
+		fail(M.BinPathFail, err)
 		return exitConfig
 	}
 
-	if !autoYes && !confirmYN(fmt.Sprintf("удалить исполняемый файл clank (%s)? [y/N]: ", execPath), false) {
-		fmt.Println("отменено")
+	if !autoYes && !confirmYN(fmt.Sprintf(M.UninstAsk, execPath), false) {
+		fmt.Println(M.Aborted)
 		return exitOK
 	}
 
 	if err := removeBinary(execPath); err != nil {
-		fail("ошибка при удалении %s: %v\n  (если нет прав, выполните: sudo rm %s)", execPath, err, execPath)
+		fail(M.UninstFail, execPath, err, execPath)
 		return exitConfig
 	}
 
-	fmt.Printf("исполняемый файл clank (%s) удалён с машины\n", execPath)
+	fmt.Printf(M.UninstDone, execPath)
 	return exitOK
 }
 
@@ -98,15 +98,15 @@ func cmdNuke(args []string) int {
 
 	execPath, err := getExecPath()
 	if err != nil {
-		fail("не удалось определить путь к бинарнику: %v", err)
+		fail(M.BinPathFail, err)
 		return exitConfig
 	}
 
 	dir, _ := clankDir()
 
-	prompt := fmt.Sprintf("ВНИМАНИЕ: это полностью удалит бинарник (%s) и ВСЕ данные (%s). Продолжить? [y/N]: ", execPath, dir)
+	prompt := fmt.Sprintf(M.NukeAsk, execPath, dir)
 	if !autoYes && !confirmYN(prompt, false) {
-		fmt.Println("отменено")
+		fmt.Println(M.Aborted)
 		return exitOK
 	}
 
@@ -114,19 +114,19 @@ func cmdNuke(args []string) int {
 
 	if dir != "" {
 		if err := os.RemoveAll(dir); err != nil && !os.IsNotExist(err) {
-			errs = append(errs, fmt.Sprintf("данные (%v)", err))
+			errs = append(errs, fmt.Sprintf(M.NukeDataErr, err))
 		}
 	}
 
 	if err := removeBinary(execPath); err != nil {
-		errs = append(errs, fmt.Sprintf("бинарник (%v)", err))
+		errs = append(errs, fmt.Sprintf(M.NukeBinErr, err))
 	}
 
 	if len(errs) > 0 {
-		fail("при полном удалении возникли ошибки: %s", errs)
+		fail(M.NukePartFail, errs)
 		return exitConfig
 	}
 
-	fmt.Println("clank полностью удалён с машины (бинарник и все данные)")
+	fmt.Println(M.NukeDone)
 	return exitOK
 }

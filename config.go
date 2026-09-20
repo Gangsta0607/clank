@@ -29,6 +29,10 @@ type Profile struct {
 	ReasoningEffort string `json:"reasoning_effort,omitempty"` // калиброванное значение effort
 	ReasoningBudget int    `json:"reasoning_budget,omitempty"` // калиброванный токеновый бюджет (если модель использует budget)
 
+	// Vision — умеет ли модель разбирать изображения. nil = не проверяли
+	// (считаем, что умеет), выставляется через `clank config test-vision`.
+	Vision *bool `json:"vision,omitempty"`
+
 	ExecTimeoutSec int    `json:"exec_timeout_sec,omitempty"` // 0 = дефолт
 	Created        string `json:"created,omitempty"`
 }
@@ -52,6 +56,9 @@ type ConfigFile struct {
 	Profiles map[string]Profile    `json:"profiles"`
 	Allowed  map[string]TrustLevel `json:"allowed_commands,omitempty"`
 	Yolo     bool                  `json:"yolo,omitempty"`
+	// Language — язык интерфейса: "ru", "en", пусто = автоопределение
+	// по LANG/LC_ALL/LC_MESSAGES. Меняется через `clank language`.
+	Language string `json:"language,omitempty"`
 }
 
 // Путь фиксирован явно (не os.UserConfigDir()) — на macOS это дало бы
@@ -92,6 +99,7 @@ func (cf *ConfigFile) UnmarshalJSON(data []byte) error {
 		Profiles        map[string]Profile `json:"profiles"`
 		AllowedCommands json.RawMessage    `json:"allowed_commands"`
 		Yolo            bool               `json:"yolo"`
+		Language        string             `json:"language"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
@@ -99,6 +107,7 @@ func (cf *ConfigFile) UnmarshalJSON(data []byte) error {
 	cf.Active = raw.Active
 	cf.Profiles = raw.Profiles
 	cf.Yolo = raw.Yolo
+	cf.Language = raw.Language
 	cf.Allowed = make(map[string]TrustLevel)
 
 	if len(raw.AllowedCommands) > 0 {
@@ -131,7 +140,7 @@ func loadConfigFile() (ConfigFile, error) {
 		return cf, err
 	}
 	if err := json.Unmarshal(data, &cf); err != nil {
-		return cf, fmt.Errorf("конфиг повреждён (%s): %w", path, err)
+		return cf, fmt.Errorf(M.ConfigCorrupt, path, err)
 	}
 	if cf.Profiles == nil {
 		cf.Profiles = map[string]Profile{}
@@ -189,7 +198,7 @@ func activeProfile(cf *ConfigFile) (string, Profile, error) {
 		if p, ok := cf.Profiles[cf.Active]; ok {
 			return cf.Active, p, nil
 		}
-		warn("активный профиль %q не найден в конфиге", cf.Active)
+		warn(M.ActiveNotFound, cf.Active)
 	}
 	if len(cf.Profiles) == 0 {
 		if cf.Profiles == nil {
@@ -203,9 +212,9 @@ func activeProfile(cf *ConfigFile) (string, Profile, error) {
 	name := newestProfileName(*cf)
 	cf.Active = name
 	if err := saveConfigFile(*cf); err != nil {
-		warn("не смог сохранить выбор активного профиля: %v", err)
+		warn(M.ActiveSaveFail, err)
 	}
-	info("активный профиль не задан, переключаюсь на %s (сменить: clank config use <имя>)", name)
+	info(M.ActiveSwitch, name)
 	return name, cf.Profiles[name], nil
 }
 
@@ -246,7 +255,7 @@ func (p Profile) validate() error {
 		missing = append(missing, "model")
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("профиль не настроен, не хватает: %s — заполни: clank config add <имя>",
+		return fmt.Errorf(M.ProfileInvalid,
 			strings.Join(missing, ", "))
 	}
 	return nil
@@ -261,7 +270,7 @@ func (p Profile) execTimeout() time.Duration {
 
 func maskKey(key string) string {
 	if key == "" {
-		return "<не задан>"
+		return M.KeyMissing
 	}
 	if len(key) <= 8 {
 		return "****"

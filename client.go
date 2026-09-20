@@ -99,13 +99,13 @@ func runShellCommandTool() toolDef {
 	var t toolDef
 	t.Type = "function"
 	t.Function.Name = shellToolName
-	t.Function.Description = "Выполнить shell-команду в POSIX-совместимом окружении пользователя и получить её stdout/stderr/exit code."
+	t.Function.Description = "Run a shell command in the user's POSIX environment via sh -c and get its stdout/stderr/exit code."
 	t.Function.Parameters = json.RawMessage(`{
 		"type": "object",
 		"properties": {
 			"command": {
 				"type": "string",
-				"description": "Команда для sh -c, одна строка"
+				"description": "Single-line command for sh -c"
 			}
 		},
 		"required": ["command"]
@@ -117,24 +117,24 @@ func questionTool() toolDef {
 	var t toolDef
 	t.Type = "function"
 	t.Function.Name = questionToolName
-	t.Function.Description = "Задать вопрос пользователю, предложить выбор из нескольких вариантов или запросить уточнение/ввод данных."
+	t.Function.Description = "Ask the user a question, offer a choice of options, or request clarification/input."
 	t.Function.Parameters = json.RawMessage(`{
 		"type": "object",
 		"properties": {
 			"question": {
 				"type": "string",
-				"description": "Текст вопроса пользователю"
+				"description": "Question text for the user"
 			},
 			"options": {
 				"type": "array",
 				"items": {
 					"type": "string"
 				},
-				"description": "Список вариантов для выбора пользователем (опционально)"
+				"description": "List of options for the user to choose from (optional)"
 			},
 			"default": {
 				"type": "string",
-				"description": "Вариант или значение по умолчанию при нажатии Enter (опционально)"
+				"description": "Default option or value on Enter (optional)"
 			}
 		},
 		"required": ["question"]
@@ -146,18 +146,32 @@ func viewImageTool() toolDef {
 	var t toolDef
 	t.Type = "function"
 	t.Function.Name = viewImageToolName
-	t.Function.Description = "Просмотреть содержимое локального графического файла (PNG, JPEG, WebP, GIF) для анализа изображения, распознавания текста (OCR) или проверки графики."
+	t.Function.Description = "Look at a local image file (PNG, JPEG, WebP, GIF) to analyze the picture, read text (OCR), or inspect graphics."
 	t.Function.Parameters = json.RawMessage(`{
 		"type": "object",
 		"properties": {
 			"path": {
 				"type": "string",
-				"description": "Путь к файлу изображения (относительный или абсолютный)"
+				"description": "Path to the image file (relative or absolute)"
 			}
 		},
 		"required": ["path"]
 	}`)
 	return t
+}
+
+// requestTools собирает набор инструментов для запроса. view_image отдаём
+// только если поддержка vision не опровергнута (Profile.Vision == false):
+// слепой модели схема ни к чему, она всё равно получит ошибку.
+func requestTools(p Profile, force bool) []toolDef {
+	if !p.UseTools && !force {
+		return nil
+	}
+	tools := []toolDef{runShellCommandTool(), questionTool()}
+	if p.Vision == nil || *p.Vision {
+		tools = append(tools, viewImageTool())
+	}
+	return tools
 }
 
 func encodeImageFile(path string) (string, error) {
@@ -166,7 +180,7 @@ func encodeImageFile(path string) (string, error) {
 		return "", err
 	}
 	if len(data) > 20<<20 {
-		return "", fmt.Errorf("файл слишком большой (>20MB)")
+		return "", fmt.Errorf(M.ImageBig)
 	}
 	mime := http.DetectContentType(data)
 	ext := strings.ToLower(filepath.Ext(path))
@@ -181,7 +195,7 @@ func encodeImageFile(path string) (string, error) {
 		mime = "image/gif"
 	}
 	if !strings.HasPrefix(mime, "image/") {
-		return "", fmt.Errorf("файл %s не является поддерживаемым изображением (тип %s)", path, mime)
+		return "", fmt.Errorf(M.ImageType, path, mime)
 	}
 	b64 := base64.StdEncoding.EncodeToString(data)
 	return fmt.Sprintf("data:%s;base64,%s", mime, b64), nil
@@ -256,12 +270,12 @@ func (e *apiError) Error() string {
 	case e.status > 0:
 		fmt.Fprintf(&b, "HTTP %d", e.status)
 	case e.kind == errConfig:
-		b.WriteString("настройка профиля")
+		b.WriteString(M.ErrSetup)
 	default:
-		b.WriteString("не удалось соединиться")
+		b.WriteString(M.ErrNoConn)
 	}
 	if e.model != "" {
-		fmt.Fprintf(&b, " (модель %s)", e.model)
+		fmt.Fprintf(&b, M.ModelParen, e.model)
 	}
 	if e.msg != "" {
 		fmt.Fprintf(&b, ": %s", truncateRunes(e.msg, 400))
@@ -278,25 +292,25 @@ func (e *apiError) short() string {
 	case e.status > 0:
 		return fmt.Sprintf("HTTP %d", e.status)
 	case e.kind == errConfig:
-		return "ошибка настройки"
+		return M.ErrShort
 	}
-	return "нет связи"
+	return M.NoConn
 }
 
 func (e *apiError) hint() string {
 	switch e.kind {
 	case errAuth:
-		return "ключ не принят — проверь: clank config show"
+		return M.HintAuth
 	case errNotFound:
-		return "проверь base_url (clank ask сам дописывает /v1/chat/completions): clank config show"
+		return M.HintURL
 	case errModelMissing:
-		return "такой модели у провайдера нет — выбери заново: clank models"
+		return M.HintModel
 	case errContextOverflow:
-		return "контекст переполнен — очисти историю (clank session clear) или подавай меньше данных в пайп"
+		return M.HintCtx
 	case errRateLimit:
-		return "лимит запросов у провайдера"
+		return M.HintRate
 	case errTransport:
-		return "сеть, прокси или адрес — проверь: clank config show"
+		return M.HintNet
 	}
 	return ""
 }
@@ -365,10 +379,10 @@ func httpClient(p Profile) (*http.Client, error) {
 		if err != nil {
 			// Раньше кривой прокси молча приводил к прямому соединению:
 			// пользователь думал, что трафик идёт через прокси, а он не шёл.
-			return nil, fmt.Errorf("не разобрать proxy %q: %w — поправь: clank config set-proxy <url|->", p.Proxy, err)
+			return nil, fmt.Errorf(M.ProxyParse, p.Proxy, err)
 		}
 		if u.Scheme == "" || u.Host == "" {
-			return nil, fmt.Errorf("proxy %q без схемы или хоста (нужно вида http://host:port) — поправь: clank config set-proxy <url|->", p.Proxy)
+			return nil, fmt.Errorf(M.ProxyBlind, p.Proxy)
 		}
 		transport.Proxy = http.ProxyURL(u)
 	} else {
@@ -406,7 +420,7 @@ func apiRequest(p Profile, method, path string, body []byte, model string) ([]by
 	if err != nil {
 		return nil, &apiError{kind: errTransport, msg: err.Error(), url: endpoint, model: model}
 	}
-	detail("ответ %d за %.1fс, %d байт", resp.StatusCode, time.Since(started).Seconds(), len(respBody))
+	detail(M.RespDetail, resp.StatusCode, time.Since(started).Seconds(), len(respBody))
 
 	// Любой 2xx считаем успехом: некоторые прокси отвечают 201.
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
@@ -458,8 +472,8 @@ func chatComplete(p Profile, model string, messages []chatMessage, useTools bool
 		Messages: messages,
 		Stream:   false,
 	}
-	if useTools {
-		reqStruct.Tools = []toolDef{runShellCommandTool(), questionTool(), viewImageTool()}
+	if useTools := requestTools(p, useTools); useTools != nil {
+		reqStruct.Tools = useTools
 	}
 	if p.Reasoning != nil {
 		if *p.Reasoning {
@@ -488,7 +502,7 @@ func chatComplete(p Profile, model string, messages []chatMessage, useTools bool
 	if err != nil {
 		return chatResult{}, err
 	}
-	detail("запрос: модель %s, сообщений %d, %d байт", model, len(messages), len(reqBody))
+	detail(M.ReqDetail, model, len(messages), len(reqBody))
 
 	respBody, err := apiRequest(p, http.MethodPost, "/v1/chat/completions", reqBody, model)
 	if err != nil {
@@ -498,13 +512,13 @@ func chatComplete(p Profile, model string, messages []chatMessage, useTools bool
 	var parsed chatResponse
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
 		return chatResult{}, &apiError{kind: errOther, model: model,
-			msg: fmt.Sprintf("ответ не разобрать: %v (первые байты: %s)", err, truncateRunes(string(respBody), 200))}
+			msg: fmt.Sprintf(M.RespUnpars, err, truncateRunes(string(respBody), 200))}
 	}
 	if parsed.Error != nil && parsed.Error.Message != "" {
 		return chatResult{}, &apiError{kind: classify(0, parsed.Error.Message), model: model, msg: parsed.Error.Message}
 	}
 	if len(parsed.Choices) == 0 {
-		return chatResult{}, &apiError{kind: errServer, model: model, msg: "пустой список choices в ответе"}
+		return chatResult{}, &apiError{kind: errServer, model: model, msg: M.EmptyChoi}
 	}
 
 	c := parsed.Choices[0]
@@ -554,7 +568,7 @@ func stripThinkBlocks(s string) string {
 // прожигал бы всю цепочку.
 func chatWithFallback(p Profile, messages []chatMessage, useTools bool) (chatResult, error) {
 	if len(p.Models) == 0 {
-		return chatResult{}, fmt.Errorf("в профиле нет ни одной модели — выбери: clank models")
+		return chatResult{}, fmt.Errorf(M.NoModels)
 	}
 
 	var (
@@ -565,7 +579,7 @@ func chatWithFallback(p Profile, messages []chatMessage, useTools bool) (chatRes
 		res, err := chatCompleteRetry(p, model, messages, useTools)
 		if err == nil {
 			if i > 0 {
-				info("отвечает %s", model)
+				info(M.Answering, model)
 			}
 			return res, nil
 		}
@@ -580,7 +594,7 @@ func chatWithFallback(p Profile, messages []chatMessage, useTools bool) (chatRes
 			return chatResult{}, err
 		}
 		if i < len(p.Models)-1 {
-			info("%s не ответил (%s), пробую %s", model, ae.short(), p.Models[i+1])
+			info(M.ModelFail, model, ae.short(), p.Models[i+1])
 		}
 	}
 
@@ -589,7 +603,7 @@ func chatWithFallback(p Profile, messages []chatMessage, useTools bool) (chatRes
 	if len(attempts) == 1 {
 		return chatResult{}, lastErr
 	}
-	return chatResult{}, fmt.Errorf("ни одна модель не ответила:\n  %s\nпоследняя ошибка: %v",
+	return chatResult{}, fmt.Errorf(M.NoAnswer,
 		strings.Join(attempts, "\n  "), lastErr)
 }
 
@@ -609,7 +623,7 @@ func chatCompleteRetry(p Profile, model string, messages []chatMessage, useTools
 		if !ok || !ae.retryable() || attempt == maxRetries {
 			return chatResult{}, err
 		}
-		info("%s: %s, повтор через %s (%d/%d)", model, ae.short(), backoff, attempt, maxRetries-1)
+		info(M.RetryIn, model, ae.short(), backoff, attempt, maxRetries-1)
 		time.Sleep(backoff)
 		backoff *= 2
 	}
@@ -623,10 +637,10 @@ func listModels(p Profile) ([]string, error) {
 	}
 	var parsed modelsResponse
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return nil, fmt.Errorf("список моделей не разобрать: %w", err)
+		return nil, fmt.Errorf(M.ModelsUnp, err)
 	}
 	if parsed.Error != nil && parsed.Error.Message != "" {
-		return nil, fmt.Errorf("API вернул ошибку: %s", parsed.Error.Message)
+		return nil, fmt.Errorf(M.APIError, parsed.Error.Message)
 	}
 	ids := make([]string, 0, len(parsed.Data))
 	for _, m := range parsed.Data {
@@ -642,11 +656,11 @@ func listModels(p Profile) ([]string, error) {
 func testToolSupport(p Profile, model string) (ok bool, detailText string, err error) {
 	sys := chatMessage{
 		Role:    "system",
-		Content: "У тебя есть инструмент run_shell_command. Если для точного ответа нужно посмотреть реальные данные окружения — используй его, а не гадай.",
+		Content: M.ToolProbeS,
 	}
 	user := chatMessage{
 		Role:    "user",
-		Content: "Сколько файлов и папок лежит прямо в текущей директории? Если можешь узнать точно через доступный инструмент — узнай.",
+		Content: M.ToolProbeU,
 	}
 	res, err := chatComplete(p, model, []chatMessage{sys, user}, true)
 	if err != nil {
@@ -687,7 +701,7 @@ func testReasoningSupport(p Profile, model string) (reasoningTestResult, error) 
 		return parsed, nil
 	}
 
-	baseMsg := []chatMessage{{Role: "user", Content: "2+2=? Ответь только цифрой"}}
+	baseMsg := []chatMessage{{Role: "user", Content: "2+2=? Reply with the digit only / Ответь только цифрой"}}
 
 	// 1. Тестируем effort для ON в порядке: max, ultra, xhigh, high
 	for _, val := range []string{"max", "ultra", "xhigh", "high"} {
@@ -764,7 +778,7 @@ func testVisionSupport(p Profile, model string) (ok bool, detailText string, err
 	userMsg := chatMessage{
 		Role: "user",
 		Content: []contentPart{
-			{Type: "text", Text: "Какого цвета это изображение? Ответь кратко."},
+			{Type: "text", Text: M.VisionProb},
 			{Type: "image_url", ImageURL: &imageURL{URL: dataURL}},
 		},
 	}

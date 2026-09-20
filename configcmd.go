@@ -31,31 +31,31 @@ func cmdConfig(args []string) int {
 
 	case "add":
 		if len(args) < 2 {
-			fail("нужно имя профиля: clank config add <имя>")
+			fail(M.NeedProfileName, "add")
 			return exitConfig
 		}
 		return cmdConfigAdd(&cf, args[1])
 
 	case "use":
 		if len(args) < 2 {
-			fail("нужно имя профиля: clank config use <имя>")
+			fail(M.NeedProfileName, "use")
 			return exitConfig
 		}
 		if _, ok := cf.Profiles[args[1]]; !ok {
-			fail("нет такого профиля: %s (есть: %s)", args[1], strings.Join(profileNames(cf), ", "))
+			fail(M.NoSuchProfileList, args[1], strings.Join(profileNames(cf), ", "))
 			return exitConfig
 		}
 		cf.Active = args[1]
 		if err := saveConfigFile(cf); err != nil {
-			fail("не смог сохранить: %v", err)
+			fail(M.SaveFail, err)
 			return exitConfig
 		}
-		fmt.Println("активный профиль:", args[1])
+		fmt.Println(M.ActiveProfileIs, args[1])
 		return exitOK
 
 	case "list":
 		if len(cf.Profiles) == 0 {
-			fmt.Println("профилей нет: clank config init")
+			fmt.Println(M.NoProfiles)
 			return exitOK
 		}
 		for _, n := range profileNames(cf) {
@@ -71,11 +71,11 @@ func cmdConfig(args []string) int {
 
 	case "rm":
 		if len(args) < 2 {
-			fail("нужно имя профиля: clank config rm <имя>")
+			fail(M.NeedProfileName, "rm")
 			return exitConfig
 		}
 		if _, ok := cf.Profiles[args[1]]; !ok {
-			fail("нет такого профиля: %s", args[1])
+			fail(M.NoSuchProfile, args[1])
 			return exitConfig
 		}
 		delete(cf.Profiles, args[1])
@@ -83,14 +83,14 @@ func cmdConfig(args []string) int {
 			cf.Active = ""
 			if len(cf.Profiles) > 0 {
 				cf.Active = newestProfileName(cf)
-				info("удалён активный профиль, переключаюсь на %s", cf.Active)
+				info(M.ActiveRemoved, cf.Active)
 			}
 		}
 		if err := saveConfigFile(cf); err != nil {
-			fail("не смог сохранить: %v", err)
+			fail(M.SaveFail, err)
 			return exitConfig
 		}
-		fmt.Println("удалён:", args[1])
+		fmt.Println(M.RemovedIs, args[1])
 		return exitOK
 
 	case "show":
@@ -100,24 +100,24 @@ func cmdConfig(args []string) int {
 			return exitConfig
 		}
 		path, _ := configPath()
-		fmt.Println("файл:      ", path)
-		fmt.Println("профиль:   ", name)
-		fmt.Println("base_url:  ", valueOr(p.BaseURL, "<не задан>"))
+		fmt.Println(M.ShowFile, path)
+		fmt.Println(M.ShowProfile, name)
+		fmt.Println("base_url:  ", valueOr(p.BaseURL, M.ShowNotSet))
 		fmt.Println("api_key:   ", maskKey(p.APIKey))
 		if len(p.Models) == 0 {
-			fmt.Println("модели:     <не заданы>")
+			fmt.Println(M.ShowModelsNone)
 		} else {
-			fmt.Println("модели:    ", "(по порядку фоллбэка)")
+			fmt.Println(M.ShowModelsHead)
 			for i, m := range p.Models {
 				fmt.Printf("             %d) %s\n", i+1, m)
 			}
 		}
-		fmt.Println("proxy:     ", valueOr(p.Proxy, "<не задан, берётся из env>"))
+		fmt.Println("proxy:     ", valueOr(p.Proxy, M.ShowNoEnvProxy))
 		fmt.Println("use_tools: ", p.UseTools)
 		if p.Reasoning != nil {
-			state := "выключен"
+			state := M.ShowThinkOff
 			if *p.Reasoning {
-				state = "включён"
+				state = M.ShowThinkOn
 			}
 			var details []string
 			if p.ReasoningEffort != "" {
@@ -127,30 +127,40 @@ func cmdConfig(args []string) int {
 				details = append(details, fmt.Sprintf("budget: %d", p.ReasoningBudget))
 			}
 			if len(details) > 0 {
-				fmt.Printf("мышление:   %s (%s)\n", state, strings.Join(details, ", "))
+				fmt.Printf(M.ShowThinkCal, state, strings.Join(details, ", "))
 			} else {
-				fmt.Println("мышление:  ", state)
+				fmt.Println(M.ShowThinkPlain, state)
 			}
 		} else {
-			fmt.Println("мышление:   <авто/по умолчанию провайдера>")
+			fmt.Println(M.ShowThinkAuto)
 		}
-		fmt.Println("таймаут:   ", p.execTimeout())
+		if p.Vision != nil {
+			if *p.Vision {
+				fmt.Println(M.ShowVisionOn)
+			} else {
+				fmt.Println(M.ShowVisionOff)
+			}
+		} else {
+			fmt.Println(M.ShowVisionAuto)
+		}
+		fmt.Println(M.ShowTimeout, p.execTimeout())
 		if cf.Yolo {
-			fmt.Println("yolo:       включён")
+			fmt.Println(M.ShowYoloOn)
 		}
+		fmt.Println(M.ShowLanguage, showLanguage(cf.Language))
 		if len(cf.Allowed) > 0 {
 			var items []string
 			for k, lvl := range cf.Allowed {
 				items = append(items, fmt.Sprintf("%s (%s)", k, lvl))
 			}
 			sort.Strings(items)
-			fmt.Println("разрешены: ", strings.Join(items, ", "))
+			fmt.Println(M.ShowAllowed, strings.Join(items, ", "))
 		}
 		return exitOK
 
 	case "set-url", "set-key", "set-model", "set-models", "set-proxy", "set-tools", "set-reasoning", "set-exec-timeout":
 		if len(args) < 2 {
-			fail("нужно значение: clank config %s <значение>", args[0])
+			fail(M.NeedValue, args[0])
 			return exitConfig
 		}
 		name, p, err := activeProfile(&cf)
@@ -173,7 +183,7 @@ func cmdConfig(args []string) int {
 				}
 			}
 			if len(models) == 0 {
-				fail("список моделей пуст")
+				fail(M.ModelsEmpty)
 				return exitConfig
 			}
 			p.Models = models
@@ -198,23 +208,23 @@ func cmdConfig(args []string) int {
 				p.ReasoningEffort = ""
 				p.ReasoningBudget = 0
 			default:
-				fail("неверное значение: %s (ожидается on, off или -)", val)
+				fail(M.BadSetReason, val)
 				return exitConfig
 			}
 		case "set-exec-timeout":
 			secs, err := strconv.Atoi(val)
 			if err != nil || secs < 0 {
-				fail("таймаут задаётся целым числом секунд (0 — вернуть дефолт)")
+				fail(M.BadTimeout)
 				return exitConfig
 			}
 			p.ExecTimeoutSec = secs
 		}
 		cf.Profiles[name] = p
 		if err := saveConfigFile(cf); err != nil {
-			fail("не смог сохранить: %v", err)
+			fail(M.SaveFail, err)
 			return exitConfig
 		}
-		fmt.Println("ок")
+		fmt.Println(M.SavedOK)
 		return exitOK
 
 	case "test-tools":
@@ -243,31 +253,31 @@ func cmdConfig(args []string) int {
 
 	case "allow-rm":
 		if len(args) < 2 {
-			fail("нужно имя команды: clank config allow-rm <имя>")
+			fail(M.AllowNeedName)
 			return exitConfig
 		}
 		if !cf.disallow(args[1]) {
-			fail("%s нет в списке разрешённых", args[1])
+			fail(M.AllowNotListed, args[1])
 			return exitConfig
 		}
 		if err := saveConfigFile(cf); err != nil {
-			fail("не смог сохранить: %v", err)
+			fail(M.SaveFail, err)
 			return exitConfig
 		}
-		fmt.Println("убрано из разрешённых:", args[1])
+		fmt.Println(M.AllowRemoved, args[1])
 		return exitOK
 
 	case "allow-clear":
 		cf.Allowed = nil
 		if err := saveConfigFile(cf); err != nil {
-			fail("не смог сохранить: %v", err)
+			fail(M.SaveFail, err)
 			return exitConfig
 		}
-		fmt.Println("список разрешённых команд очищен")
+		fmt.Println(M.AllowCleared)
 		return exitOK
 
 	default:
-		fail("неизвестная подкоманда: %s", args[0])
+		fail(M.UnknownSubcommand, args[0])
 		printConfigUsage()
 		return exitConfig
 	}
@@ -279,7 +289,7 @@ func cmdConfig(args []string) int {
 // перенастраивал default.
 func cmdConfigAdd(cf *ConfigFile, name string) int {
 	if !haveTTY() {
-		fail("мастеру настройки нужен терминал; в скрипте используй clank config set-url/set-key/set-model")
+		fail(M.WizardNeedsTTY)
 		return exitConfig
 	}
 
@@ -288,7 +298,7 @@ func cmdConfigAdd(cf *ConfigFile, name string) int {
 		existing.Created = time.Now().Format(time.RFC3339)
 	}
 
-	fmt.Printf("настройка профиля %q (Enter — оставить как есть)\n", name)
+	fmt.Printf(M.WizardTitle+"\n", name)
 	existing.BaseURL = normalizeBaseURL(askLineDefault("base_url", existing.BaseURL, existing.BaseURL))
 	// Ключ показываем замаскированным: иначе он остаётся в скроллбэке
 	// терминала и в любой записи экрана.
@@ -302,21 +312,21 @@ func cmdConfigAdd(cf *ConfigFile, name string) int {
 		cf.Active = name
 	}
 	if err := saveConfigFile(*cf); err != nil {
-		fail("не смог сохранить конфиг: %v", err)
+		fail(M.ConfigSaveFail, err)
 		return exitConfig
 	}
-	fmt.Println("профиль сохранён:", name)
+	fmt.Println(M.ProfileSaved, name)
 
-	if confirmYN("подтянуть список моделей и выбрать сейчас? [Y/n]: ", true) {
+	if confirmYN(M.AskFetchModels, true) {
 		if code := selectModels(cf, name, ""); code != exitOK {
-			warn("список моделей получить не удалось")
+			warn(M.ModelsFetchFail)
 		}
 	}
 
 	// Раньше при отказе или сетевой ошибке профиль оставался без модели,
 	// и первый же вопрос падал на проверке конфига.
 	if len(cf.Profiles[name].Models) == 0 {
-		line, ok := askLine("модель (через запятую — цепочка фоллбэка): ")
+		line, ok := askLine(M.AskModelLine)
 		if ok && strings.TrimSpace(line) != "" {
 			p := cf.Profiles[name]
 			for _, m := range strings.Split(line, ",") {
@@ -326,22 +336,22 @@ func cmdConfigAdd(cf *ConfigFile, name string) int {
 			}
 			cf.Profiles[name] = p
 			if err := saveConfigFile(*cf); err != nil {
-				fail("не смог сохранить конфиг: %v", err)
+				fail(M.ConfigSaveFail, err)
 				return exitConfig
 			}
 		}
 	}
 
 	if len(cf.Profiles[name].Models) == 0 {
-		warn("профиль без модели — задай позже: clank models  или  clank config set-model <имя>")
+		warn(M.ProfileNoModel)
 		return exitOK
 	}
 
-	if confirmYN("проверить поддержку tool calls для этого профиля? [Y/n]: ", true) {
+	if confirmYN(M.AskTestTools, true) {
 		return cmdTestTools(cf, name)
 	}
 
-	fmt.Println("готово. use_tools можно проверить позже: clank config test-tools")
+	fmt.Println(M.ToolsSkipLater)
 	return exitOK
 }
 
@@ -354,9 +364,7 @@ func cmdModels(args []string) int {
 		case "-q", "--quiet":
 			verboseLevel = vQuiet
 		case "-h", "--help":
-			fmt.Fprintln(os.Stderr, `использование: clank models [фильтр]
-  показывает модели активного профиля и позволяет выбрать цепочку
-  номерами через запятую: 1,4,7 — первая основная, остальные запасные`)
+			fmt.Fprintln(os.Stderr, M.ModelsHelp)
 			return exitOK
 		default:
 			filter = a
@@ -381,11 +389,11 @@ func cmdModels(args []string) int {
 func selectModels(cf *ConfigFile, name, filter string) int {
 	p := cf.Profiles[name]
 	if p.BaseURL == "" || p.APIKey == "" {
-		fail("сначала задай base_url и api_key: clank config add %s", name)
+		fail(M.ModelsNeedCreds, name)
 		return exitConfig
 	}
 
-	sp := startSpinner("получаю список моделей")
+	sp := startSpinner(M.FetchingModels)
 	ids, err := listModels(p)
 	sp.stopSpinner()
 	if err != nil {
@@ -404,9 +412,9 @@ func selectModels(cf *ConfigFile, name, filter string) int {
 	}
 	if len(ids) == 0 {
 		if filter != "" {
-			fail("под фильтр %q ничего не подошло", filter)
+			fail(M.FilterNoMatch, filter)
 		} else {
-			fail("API вернул пустой список моделей")
+			fail(M.ModelsEmptyAPI)
 		}
 		return exitAPI
 	}
@@ -438,12 +446,12 @@ func selectModels(cf *ConfigFile, name, filter string) int {
 		fmt.Println(line)
 	}
 	if len(current) > 0 {
-		fmt.Println("\nслева от номера — текущая позиция модели в цепочке фоллбэка")
+		fmt.Println(M.ChainHint)
 	}
 
-	line, ok := askLine("\nномера через запятую, первый — основной (Enter — отмена): ")
+	line, ok := askLine(M.AskChainNumbers)
 	if !ok || line == "" {
-		fmt.Println("отменено")
+		fmt.Println(M.Cancelled)
 		return exitOK
 	}
 
@@ -456,7 +464,7 @@ func selectModels(cf *ConfigFile, name, filter string) int {
 		}
 		n, err := strconv.Atoi(part)
 		if err != nil || n < 1 || n > len(ids) {
-			fail("некорректный номер: %s (нужно от 1 до %d)", part, len(ids))
+			fail(M.BadNumber, part, len(ids))
 			return exitConfig
 		}
 		if !seen[ids[n-1]] {
@@ -465,20 +473,20 @@ func selectModels(cf *ConfigFile, name, filter string) int {
 		}
 	}
 	if len(chosen) == 0 {
-		fmt.Println("отменено")
+		fmt.Println(M.Cancelled)
 		return exitOK
 	}
 
 	p.Models = chosen
 	cf.Profiles[name] = p
 	if err := saveConfigFile(*cf); err != nil {
-		fail("не смог сохранить конфиг: %v", err)
+		fail(M.ConfigSaveFail, err)
 		return exitConfig
 	}
 	if len(chosen) == 1 {
-		fmt.Println("модель установлена:", chosen[0])
+		fmt.Println(M.ModelSet, chosen[0])
 	} else {
-		fmt.Println("цепочка установлена:", strings.Join(chosen, " → "))
+		fmt.Println(M.ChainSet, strings.Join(chosen, " → "))
 	}
 	return exitOK
 }
@@ -491,8 +499,8 @@ func cmdTestTools(cf *ConfigFile, name string) int {
 	}
 
 	model := p.Models[0]
-	fmt.Println("проверяю tool calls на модели", model, "...")
-	sp := startSpinner("жду ответ")
+	fmt.Println(M.TestToolsCheck, model, "...")
+	sp := startSpinner(M.WaitingAnswer)
 	ok, detailText, err := testToolSupport(p, model)
 	sp.stopSpinner()
 	if err != nil {
@@ -500,24 +508,24 @@ func cmdTestTools(cf *ConfigFile, name string) int {
 		return exitAPI
 	}
 	if ok {
-		fmt.Println("модель вызвала tool_call:", sanitizeForDisplay(truncateRunes(detailText, 300)))
+		fmt.Println(M.ToolCalled, sanitizeForDisplay(truncateRunes(detailText, 300)))
 	} else {
-		fmt.Println("модель НЕ вызвала tool_call, ответила текстом:", truncateRunes(detailText, 300))
+		fmt.Println(M.ToolNotCalled, truncateRunes(detailText, 300))
 	}
 	if len(p.Models) > 1 {
-		info("проверена только первая модель цепочки; use_tools общий на профиль")
+		info(M.ChainFirstOnly)
 	}
 
-	if confirmYN(fmt.Sprintf("сохранить use_tools=%v для профиля %s? [Y/n]: ", ok, name), true) {
+	if confirmYN(fmt.Sprintf(M.AskSaveTools, ok, name), true) {
 		p.UseTools = ok
 		cf.Profiles[name] = p
 		if err := saveConfigFile(*cf); err != nil {
-			fail("не смог сохранить: %v", err)
+			fail(M.SaveFail, err)
 			return exitConfig
 		}
-		fmt.Println("сохранено")
+		fmt.Println(M.SavedOK)
 	} else {
-		fmt.Println("не сохранено")
+		fmt.Println(M.SavedNot)
 	}
 	return exitOK
 }
@@ -530,8 +538,8 @@ func cmdTestReasoning(cf *ConfigFile, name string) int {
 	}
 
 	model := p.Models[0]
-	fmt.Println("проверяю поддержку reasoning на модели", model, "...")
-	sp := startSpinner("тестирую параметры")
+	fmt.Println(M.TestReasonCheck, model, "...")
+	sp := startSpinner(M.TestingParams)
 	res, err := testReasoningSupport(p, model)
 	sp.stopSpinner()
 	if err != nil {
@@ -539,29 +547,29 @@ func cmdTestReasoning(cf *ConfigFile, name string) int {
 		return exitAPI
 	}
 
-	fmt.Println("\nрезультаты проверки:")
+	fmt.Println(M.ReasonResults)
 	if res.EffortOn != "" || res.EffortOff != "" {
-		fmt.Printf("  управление reasoning_effort: поддерживается (включение: %s, выключение: %s)\n",
-			valueOr(res.EffortOn, "нет"), valueOr(res.EffortOff, "нет"))
+		fmt.Printf(M.ReasonEffortOK,
+			valueOr(res.EffortOn, M.ReasonNone), valueOr(res.EffortOff, M.ReasonNone))
 	} else if res.UsesBudget {
-		fmt.Println("  управление бюджетом токенов: поддерживается (reasoning_budget)")
+		fmt.Println(M.ReasonBudgetOK)
 	} else {
-		fmt.Println("  параметры управления reasoning: не поддерживаются сервером")
+		fmt.Println(M.ReasonNoParams)
 	}
 
 	if res.HasOutput {
-		fmt.Println("  генерация рассуждений (reasoning_content / <think>): ДА")
+		fmt.Println(M.ReasonHasOutput)
 	} else {
-		fmt.Println("  генерация рассуждений: не обнаружена (модель отвечает сразу)")
+		fmt.Println(M.ReasonNoOutput)
 	}
 
 	supported := res.EffortOn != "" || res.EffortOff != "" || res.UsesBudget || res.HasOutput
 	if !supported {
-		info("эта модель не использует и не настраивает reasoning")
+		info(M.ReasonUnsupported)
 		return exitOK
 	}
 
-	if confirmYN(fmt.Sprintf("\nвключить reasoning для профиля %s? [Y/n]: ", name), true) {
+	if confirmYN(fmt.Sprintf(M.AskReasonOn, name), true) {
 		v := true
 		p.Reasoning = &v
 		if res.EffortOn != "" {
@@ -572,12 +580,12 @@ func cmdTestReasoning(cf *ConfigFile, name string) int {
 		}
 		cf.Profiles[name] = p
 		if err := saveConfigFile(*cf); err != nil {
-			fail("не смог сохранить: %v", err)
+			fail(M.SaveFail, err)
 			return exitConfig
 		}
-		fmt.Println("сохранено (reasoning: включён)")
+		fmt.Println(M.SavedReasonOn)
 	} else {
-		if confirmYN("отключить reasoning принудительно? [y/N]: ", false) {
+		if confirmYN(M.AskReasonOff, false) {
 			v := false
 			p.Reasoning = &v
 			if res.EffortOff != "" {
@@ -588,12 +596,12 @@ func cmdTestReasoning(cf *ConfigFile, name string) int {
 			}
 			cf.Profiles[name] = p
 			if err := saveConfigFile(*cf); err != nil {
-				fail("не смог сохранить: %v", err)
+				fail(M.SaveFail, err)
 				return exitConfig
 			}
-			fmt.Println("сохранено (reasoning: выключен)")
+			fmt.Println(M.SavedReasonOff)
 		} else {
-			fmt.Println("настройки не изменены")
+			fmt.Println(M.SettingsKept)
 		}
 	}
 	return exitOK
@@ -607,8 +615,8 @@ func cmdTestVision(cf *ConfigFile, name string) int {
 	}
 
 	model := p.Models[0]
-	fmt.Println("проверяю поддержку vision (изображений) на модели", model, "...")
-	sp := startSpinner("жду ответ")
+	fmt.Println(M.TestVisionCheck, model, "...")
+	sp := startSpinner(M.WaitingAnswer)
 	ok, detailText, err := testVisionSupport(p, model)
 	sp.stopSpinner()
 	if err != nil {
@@ -616,34 +624,27 @@ func cmdTestVision(cf *ConfigFile, name string) int {
 		return exitAPI
 	}
 	if ok {
-		fmt.Println("модель успешно ответила на запрос с изображением:", sanitizeForDisplay(truncateRunes(detailText, 300)))
-		info("поддержка vision подтверждена")
+		fmt.Println(M.VisionOK, sanitizeForDisplay(truncateRunes(detailText, 300)))
+		info(M.VisionConfirmed)
 	} else {
-		fmt.Println("модель НЕ смогла обработать изображение")
+		fmt.Println(M.VisionFail)
+	}
+	if confirmYN(fmt.Sprintf(M.AskSaveVision, ok, name), true) {
+		p.Vision = &ok
+		cf.Profiles[name] = p
+		if err := saveConfigFile(*cf); err != nil {
+			fail(M.SaveFail, err)
+			return exitConfig
+		}
+		fmt.Println(M.SavedOK)
+	} else {
+		fmt.Println(M.SavedNot)
 	}
 	return exitOK
 }
 
 func printConfigUsage() {
-	fmt.Fprintln(os.Stderr, `использование: clank config <команда>
-  init                       быстрая настройка профиля "default"
-  add <имя>                  создать/отредактировать именованный профиль
-  use <имя>                  сделать профиль активным
-  list                       список профилей
-  rm <имя>                   удалить профиль
-  show                       показать активный профиль
-  set-url <url>              /v1 в конце дописывать не нужно, снимется сам
-  set-key <key>
-  set-model <a[,b,c]>        цепочка моделей: не ответила первая — идёт вторая
-  set-proxy <url|->          '-' — сброс на env-прокси
-  set-tools <true|false>     ручной оверрайд use_tools
-  set-reasoning <on|off|->   включить/выключить/сбросить мышление модели
-  set-exec-timeout <сек>     потолок на выполнение команды (0 — дефолт)
-  test-tools                 проверить и (с подтверждением) сохранить use_tools
-  test-reasoning             проверить и откалибровать поддержку reasoning
-  test-vision                проверить поддержку vision (изображений) моделью
-  allow-rm <команда>         убрать команду из разрешённых без подтверждения
-  allow-clear                очистить список разрешённых команд`)
+	fmt.Fprintln(os.Stderr, M.ConfigUsage)
 }
 
 func cmdYolo(args []string) int {
@@ -655,9 +656,9 @@ func cmdYolo(args []string) int {
 
 	if len(args) == 0 {
 		if cf.Yolo {
-			fmt.Println("режим YOLO: включён (команды выполняются без подтверждения)")
+			fmt.Println(M.YoloIsOn)
 		} else {
-			fmt.Println("режим YOLO: выключен (требуется подтверждение команд)")
+			fmt.Println(M.YoloIsOff)
 		}
 		return exitOK
 	}
@@ -666,21 +667,21 @@ func cmdYolo(args []string) int {
 	case "on", "1", "true", "enable":
 		cf.Yolo = true
 		if err := saveConfigFile(cf); err != nil {
-			fail("не смог сохранить: %v", err)
+			fail(M.SaveFail, err)
 			return exitConfig
 		}
-		fmt.Println("режим YOLO включён глобально")
+		fmt.Println(M.YoloGlobalOn)
 		return exitOK
 	case "off", "0", "false", "disable":
 		cf.Yolo = false
 		if err := saveConfigFile(cf); err != nil {
-			fail("не смог сохранить: %v", err)
+			fail(M.SaveFail, err)
 			return exitConfig
 		}
-		fmt.Println("режим YOLO выключен глобально")
+		fmt.Println(M.YoloGlobalOff)
 		return exitOK
 	default:
-		fail("неизвестный параметр: %s (используй clank yolo on|off)", args[0])
+		fail(M.YoloBadArg, args[0])
 		return exitConfig
 	}
 }

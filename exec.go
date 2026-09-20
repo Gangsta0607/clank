@@ -67,7 +67,7 @@ func (c *cappedWriter) String() string {
 	// двухбайтовую кириллицу пополам и отдаёт модели мусор.
 	head := trimPartialRuneRight(c.head)
 	tail := trimPartialRuneLeft(c.tail)
-	return fmt.Sprintf("%s\n...(пропущено примерно %d байт середины вывода)...\n%s",
+	return fmt.Sprintf(M.OutputCut,
 		head, c.dropped, tail)
 }
 
@@ -122,7 +122,7 @@ func execShell(command string, timeout time.Duration) execResult {
 	}
 
 	if err := cmd.Start(); err != nil {
-		return execResult{output: "не удалось запустить: " + err.Error(), exitCode: -1}
+		return execResult{output: M.RunStartFail + err.Error(), exitCode: -1}
 	}
 
 	sigc := make(chan os.Signal, 1)
@@ -155,7 +155,7 @@ func execShell(command string, timeout time.Duration) execResult {
 
 	case <-timer.C:
 		res.timedOut = true
-		warn("команда идёт дольше %s — снимаю", timeout)
+		warn(M.ExecTooLong, timeout)
 		_ = killProcessSigterm(cmd.Process)
 		select {
 		case waitErr = <-done:

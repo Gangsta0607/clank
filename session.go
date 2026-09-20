@@ -50,22 +50,22 @@ func sessionPath() (string, error) {
 func loadSession(profile string) ([]chatMessage, *bool) {
 	path, err := sessionPath()
 	if err != nil {
-		warn("не смог определить путь сессии: %v", err)
+		warn(M.SessPathFail, err)
 		return nil, nil
 	}
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		info("сессии в этом терминале ещё нет — начинаю с чистого листа")
+		info(M.SessFresh)
 		return nil, nil
 	}
 	if err != nil {
-		warn("не смог прочитать сессию (%s): %v — начинаю с чистого листа", path, err)
+		warn(M.SessReadFail, path, err)
 		return nil, nil
 	}
 
 	var sf sessionFile
 	if err := json.Unmarshal(data, &sf); err != nil {
-		warn("файл сессии повреждён (%s): %v — начинаю с чистого листа", path, err)
+		warn(M.SessCorrupt, path, err)
 		return nil, nil
 	}
 
@@ -73,12 +73,12 @@ func loadSession(profile string) ([]chatMessage, *bool) {
 	// не умеет инструменты, сервер ответит 400 на такие сообщения — так
 	// что чужую историю не тащим.
 	if sf.Profile != "" && sf.Profile != profile {
-		info("сессия в этом терминале от профиля %s, сейчас активен %s — начинаю заново",
+		info(M.SessSwitch,
 			sf.Profile, profile)
 		return nil, nil
 	}
 
-	detail("сессия: %d сообщений, обновлена %s", len(sf.Messages), sf.Updated.Format("15:04:05"))
+	detail(M.SessDetail, len(sf.Messages), sf.Updated.Format("15:04:05"))
 	return sf.Messages, sf.Yolo
 }
 
@@ -164,7 +164,7 @@ func cmdSession(args []string) int {
 		printSessionUsage()
 		return exitOK
 	default:
-		fail("неизвестная подкоманда: %s", args[0])
+		fail(M.UnknownSubcommand, args[0])
 		printSessionUsage()
 		return exitConfig
 	}
@@ -178,20 +178,20 @@ func sessionShow() int {
 	}
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		fmt.Println("сессия этого терминала пуста")
+		fmt.Println(M.SessEmpty)
 		return exitOK
 	}
 	if err != nil {
-		fail("не смог прочитать сессию: %v", err)
+		fail(M.SessReadErr, err)
 		return exitConfig
 	}
 	var sf sessionFile
 	if err := json.Unmarshal(data, &sf); err != nil {
-		fail("файл сессии повреждён (%s): %v", path, err)
+		fail(M.SessFileBad, path, err)
 		return exitConfig
 	}
 	if len(sf.Messages) == 0 {
-		fmt.Println("сессия этого терминала пуста")
+		fmt.Println(M.SessEmpty)
 		return exitOK
 	}
 
@@ -203,7 +203,7 @@ func sessionShow() int {
 			yoloStr = ", yolo: off"
 		}
 	}
-	fmt.Printf("профиль: %s, сообщений: %d, обновлена: %s%s\n\n",
+	fmt.Printf(M.SessHeader,
 		valueOr(sf.Profile, "?"), len(sf.Messages), sf.Updated.Format("2006-01-02 15:04:05"), yoloStr)
 
 	toolCallNames := make(map[string]string)
@@ -216,11 +216,11 @@ func sessionShow() int {
 
 		switch m.Role {
 		case "tool":
-			prefix := "[выполнено]"
+			prefix := M.MarkDone
 			if toolCallNames[m.ToolCallID] == questionToolName {
-				prefix = "[ответ пользователя]"
+				prefix = M.MarkAnswer
 			} else if toolCallNames[m.ToolCallID] == viewImageToolName {
-				prefix = "[изображение загружено]"
+				prefix = M.MarkImage
 			}
 			fmt.Printf("%s\n%s\n\n", prefix, indentBlock(truncateRunes(m.Text(), 2000), "    "))
 		case "assistant":
@@ -232,7 +232,7 @@ func sessionShow() int {
 							Options  []string `json:"options"`
 						}
 						_ = json.Unmarshal([]byte(tc.Function.Arguments), &qArgs)
-						fmt.Printf("[assistant спрашивает] %s\n", sanitizeForDisplay(qArgs.Question))
+						fmt.Printf(M.MarkAsks, sanitizeForDisplay(qArgs.Question))
 						for i, opt := range qArgs.Options {
 							fmt.Printf("    %d) %s\n", i+1, sanitizeForDisplay(opt))
 						}
@@ -242,15 +242,15 @@ func sessionShow() int {
 							Path string `json:"path"`
 						}
 						_ = json.Unmarshal([]byte(tc.Function.Arguments), &imgArgs)
-						fmt.Printf("[assistant смотрит изображение] %s\n\n", sanitizeForDisplay(imgArgs.Path))
+						fmt.Printf(M.MarkViews, sanitizeForDisplay(imgArgs.Path))
 					} else {
-						fmt.Printf("[assistant просит выполнить] %s(%s)\n\n",
+						fmt.Printf(M.MarkRuns,
 							tc.Function.Name, sanitizeForDisplay(tc.Function.Arguments))
 					}
 				}
 			}
 			if strings.TrimSpace(m.Text()) != "" {
-				fmt.Printf("[assistant] %s\n\n", m.Text())
+				fmt.Printf(M.MarkAsst, m.Text())
 			}
 		default:
 			fmt.Printf("[%s] %s\n\n", m.Role, m.Text())
@@ -269,7 +269,7 @@ func sessionClear(all bool) int {
 	if all {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			fmt.Println("сессий нет")
+			fmt.Println(M.NoSessions)
 			return exitOK
 		}
 		n := 0
@@ -280,7 +280,7 @@ func sessionClear(all bool) int {
 				}
 			}
 		}
-		fmt.Printf("удалено сессий: %d\n", n)
+		fmt.Printf(M.SessRemoved, n)
 		return exitOK
 	}
 
@@ -292,12 +292,12 @@ func sessionClear(all bool) int {
 	err = os.Remove(path)
 	switch {
 	case os.IsNotExist(err):
-		fmt.Println("сессия этого терминала и так пуста")
+		fmt.Println(M.SessClearOne)
 	case err != nil:
-		fail("не смог удалить сессию: %v", err)
+		fail(M.SessClearFail, err)
 		return exitConfig
 	default:
-		fmt.Println("сессия этого терминала очищена")
+		fmt.Println(M.SessClearDone)
 	}
 	return exitOK
 }
@@ -310,7 +310,7 @@ func sessionList() int {
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil || len(entries) == 0 {
-		fmt.Println("сессий нет")
+		fmt.Println(M.NoSessions)
 		return exitOK
 	}
 
@@ -328,24 +328,18 @@ func sessionList() int {
 		if name == current {
 			mark = "* "
 		}
-		state := "терминал закрыт"
+		state := M.StClosed
 		if pid := pidFromSessionName(name); pid > 0 && processAlive(pid) {
-			state = fmt.Sprintf("шелл %d жив", pid)
+			state = fmt.Sprintf(M.StShellAlive, pid)
 		} else if name == "headless" {
-			state = "без терминала"
+			state = M.StHeadless
 		}
-		fmt.Printf("%s%-24s %s  %6d байт  %s\n",
+		fmt.Printf(M.SessRow,
 			mark, name, fi.ModTime().Format("2006-01-02 15:04"), fi.Size(), state)
 	}
 	return exitOK
 }
 
 func printSessionUsage() {
-	fmt.Fprintln(os.Stderr, `использование: clank session <команда>
-  show              транскрипт сессии текущего терминала
-  clear             стереть сессию текущего терминала
-  clear --all       стереть сессии всех терминалов
-  list              все сессии на машине
-
-у каждой вкладки терминала своя история; -r продолжает историю своей вкладки`)
+	fmt.Fprintln(os.Stderr, M.SessionUsage)
 }

@@ -24,7 +24,7 @@ func detectShell() string {
 		}
 	}
 	if sh := os.Getenv("SHELL"); sh != "" {
-		return filepath.Base(sh) + " (по $SHELL, не точно)"
+		return filepath.Base(sh) + M.ShellApprox
 	}
-	return "неизвестно"
+	return M.ShellUnknown
 }
