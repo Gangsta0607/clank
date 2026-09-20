@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -35,19 +34,6 @@ func sessionsDir() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, "sessions"), nil
-}
-
-func sessionID() string {
-	f, _, err := ttyIO()
-	if err != nil {
-		// cron, CI, пайплайн без терминала — общий файл на всех
-		return "headless"
-	}
-	var st syscall.Stat_t
-	if err := syscall.Fstat(int(f.Fd()), &st); err != nil {
-		return "headless"
-	}
-	return fmt.Sprintf("%x-%d", uint64(st.Rdev), os.Getppid())
 }
 
 func sessionPath() (string, error) {
@@ -157,13 +143,6 @@ func pidFromSessionName(name string) int {
 		return 0
 	}
 	return pid
-}
-
-// processAlive — сигнал 0 не доставляется, но проверяет существование
-// процесса: ESRCH означает, что терминала с таким шеллом больше нет.
-func processAlive(pid int) bool {
-	err := syscall.Kill(pid, 0)
-	return err == nil || err == syscall.EPERM
 }
 
 // --- команда session ---

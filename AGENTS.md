@@ -37,11 +37,16 @@ All code is in package `main` (single package, flat directory). No subdirectorie
 | `client.go`     | HTTP client, OpenAI-compatible API types, retry/fallback    |
 | `config.go`     | Config file load/save, profile management, allowed-commands |
 | `configcmd.go`  | `clank config *` and `clank models` subcommands             |
-| `exec.go`       | Shell execution (`sh -c`), output capping, command vetting  |
+| `exec.go`       | Shell execution, output capping, command vetting            |
+| `exec_*.go`     | Platform-specific shell execution (Unix/Windows)            |
 | `session.go`    | Per-TTY session persistence, GC                             |
-| `systemprompt.go` | Builds the system prompt dynamically each run             |
-| `term.go`       | Terminal width, column layout                               |
-| `tty.go`        | All interactive I/O (single `/dev/tty` reader), prompts     |
+| `session_*.go`  | Platform-specific session identity (Unix/Windows)           |
+| `systemprompt.go` | Builds the system prompt dynamically                      |
+| `systemprompt_*.go` | Platform-specific shell detection (Unix/Windows)        |
+| `term.go`       | Terminal column layout                                      |
+| `term_*.go`     | Platform-specific terminal width (Unix/Windows)             |
+| `tty.go`        | All interactive I/O (single reader), prompts                |
+| `tty_*.go`      | Platform-specific TTY handle (Unix/Windows)                 |
 | `ui.go`         | Logging levels, spinner, exit codes, string helpers         |
 
 ---

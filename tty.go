@@ -22,13 +22,13 @@ var (
 
 func ttyIO() (*os.File, *bufio.Reader, error) {
 	ttyOnce.Do(func() {
-		f, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+		f, rd, err := openPlatformTTY()
 		if err != nil {
 			ttyErr = err
 			return
 		}
 		ttyFile = f
-		ttyReader = bufio.NewReader(f)
+		ttyReader = rd
 	})
 	return ttyFile, ttyReader, ttyErr
 }

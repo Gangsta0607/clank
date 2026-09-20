@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 	"unicode/utf8"
 )
@@ -115,7 +114,7 @@ func execShell(command string, timeout time.Duration) execResult {
 	// числе у долгих команд) и в буфер, который уйдёт обратно в модель
 	w := io.MultiWriter(os.Stdout, capped)
 
-	cmd := exec.Command("sh", "-c", command)
+	cmd := createShellCmd(command)
 	cmd.Stdout = w
 	cmd.Stderr = w
 	if f, _, err := ttyIO(); err == nil {
@@ -157,7 +156,7 @@ func execShell(command string, timeout time.Duration) execResult {
 	case <-timer.C:
 		res.timedOut = true
 		warn("команда идёт дольше %s — снимаю", timeout)
-		_ = cmd.Process.Signal(syscall.SIGTERM)
+		_ = killProcessSigterm(cmd.Process)
 		select {
 		case waitErr = <-done:
 		case <-time.After(5 * time.Second):
