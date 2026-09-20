@@ -25,6 +25,10 @@ type Profile struct {
 	Proxy    string `json:"proxy"`     // пусто = брать из HTTP_PROXY/HTTPS_PROXY/NO_PROXY
 	UseTools bool   `json:"use_tools"` // выставляется через `clank config test-tools`
 
+	Reasoning       *bool  `json:"reasoning,omitempty"`        // nil = авто/дефолт, true = on, false = off
+	ReasoningEffort string `json:"reasoning_effort,omitempty"` // калиброванное значение effort
+	ReasoningBudget int    `json:"reasoning_budget,omitempty"` // калиброванный токеновый бюджет (если модель использует budget)
+
 	ExecTimeoutSec int    `json:"exec_timeout_sec,omitempty"` // 0 = дефолт
 	Created        string `json:"created,omitempty"`
 }

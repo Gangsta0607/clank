@@ -97,10 +97,13 @@ func questionTool() toolDef {
 }
 
 type chatRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
-	Stream   bool          `json:"stream"`
-	Tools    []toolDef     `json:"tools,omitempty"`
+	Model             string        `json:"model"`
+	Messages          []chatMessage `json:"messages"`
+	Stream            bool          `json:"stream"`
+	Tools             []toolDef     `json:"tools,omitempty"`
+	ReasoningEffort   string        `json:"reasoning_effort,omitempty"`
+	ReasoningBudget   *int          `json:"reasoning_budget,omitempty"`
+	MaxThinkingTokens *int          `json:"max_thinking_tokens,omitempty"`
 }
 
 type errorBody struct {
@@ -367,6 +370,29 @@ func chatComplete(p Profile, model string, messages []chatMessage, useTools bool
 	if useTools {
 		reqStruct.Tools = []toolDef{runShellCommandTool(), questionTool()}
 	}
+	if p.Reasoning != nil {
+		if *p.Reasoning {
+			if p.ReasoningBudget > 0 {
+				b := p.ReasoningBudget
+				reqStruct.ReasoningBudget = &b
+				reqStruct.MaxThinkingTokens = &b
+			} else if p.ReasoningEffort != "" {
+				reqStruct.ReasoningEffort = p.ReasoningEffort
+			} else {
+				reqStruct.ReasoningEffort = "max"
+			}
+		} else {
+			if p.ReasoningBudget > 0 {
+				b := 0
+				reqStruct.ReasoningBudget = &b
+				reqStruct.MaxThinkingTokens = &b
+			} else if p.ReasoningEffort != "" {
+				reqStruct.ReasoningEffort = p.ReasoningEffort
+			} else {
+				reqStruct.ReasoningEffort = "none"
+			}
+		}
+	}
 	reqBody, err := json.Marshal(reqStruct)
 	if err != nil {
 		return chatResult{}, err
@@ -391,12 +417,9 @@ func chatComplete(p Profile, model string, messages []chatMessage, useTools bool
 	}
 
 	c := parsed.Choices[0]
-	content := c.Message.Content
-	if strings.TrimSpace(content) == "" && c.Message.ReasoningContent != "" {
-		content = c.Message.ReasoningContent
-		detail("content пуст, беру reasoning_content")
-	}
-	content = stripThinkBlocks(content)
+	// Размышления (reasoning_content и теги <think>) никогда не подставляются
+	// в ответ пользователю.
+	content := stripThinkBlocks(c.Message.Content)
 
 	return chatResult{
 		msg: chatMessage{
@@ -409,21 +432,27 @@ func chatComplete(p Profile, model string, messages []chatMessage, useTools bool
 	}, nil
 }
 
-// stripThinkBlocks убирает <think>…</think>: reasoning-модели иногда
-// отдают рассуждения прямо в content, и пользователю они не нужны.
+// stripThinkBlocks убирает <think>…</think>, <thought>…</thought>,
+// <reasoning>…</reasoning>: размышления не должны засорять вывод пользователю.
 func stripThinkBlocks(s string) string {
-	for {
-		start := strings.Index(s, "<think>")
-		if start < 0 {
-			break
+	tags := []string{"think", "thought", "reasoning"}
+	for _, tag := range tags {
+		open := "<" + tag + ">"
+		close := "</" + tag + ">"
+		for {
+			start := strings.Index(s, open)
+			if start < 0 {
+				break
+			}
+			end := strings.Index(s[start:], close)
+			if end < 0 {
+				// открывающий тег без закрывающего (обрыв по лимиту токенов) —
+				// вырезаем всё от открывающего тега до конца, чтобы мысли не утекли
+				s = s[:start]
+				break
+			}
+			s = s[:start] + s[start+end+len(close):]
 		}
-		end := strings.Index(s[start:], "</think>")
-		if end < 0 {
-			// открывающий тег без закрывающего — обрезали по лимиту,
-			// оставляем как есть, чтобы не потерять весь ответ
-			break
-		}
-		s = s[:start] + s[start+end+len("</think>"):]
 	}
 	return strings.TrimSpace(s)
 }
@@ -537,4 +566,102 @@ func testToolSupport(p Profile, model string) (ok bool, detailText string, err e
 		return true, fmt.Sprintf("%s(%s)", tc.Function.Name, tc.Function.Arguments), nil
 	}
 	return false, res.msg.Content, nil
+}
+
+type reasoningTestResult struct {
+	EffortOn   string
+	EffortOff  string
+	BudgetOn   int
+	BudgetOff  int
+	UsesBudget bool
+	HasOutput  bool
+}
+
+func testReasoningSupport(p Profile, model string) (reasoningTestResult, error) {
+	var res reasoningTestResult
+
+	sendTest := func(reqStruct chatRequest) (chatResponse, error) {
+		reqBody, err := json.Marshal(reqStruct)
+		if err != nil {
+			return chatResponse{}, err
+		}
+		respBody, err := apiRequest(p, http.MethodPost, "/v1/chat/completions", reqBody, model)
+		if err != nil {
+			return chatResponse{}, err
+		}
+		var parsed chatResponse
+		if err := json.Unmarshal(respBody, &parsed); err != nil {
+			return chatResponse{}, err
+		}
+		return parsed, nil
+	}
+
+	baseMsg := []chatMessage{{Role: "user", Content: "2+2=? Ответь только цифрой"}}
+
+	// 1. Тестируем effort для ON в порядке: max, ultra, xhigh, high
+	for _, val := range []string{"max", "ultra", "xhigh", "high"} {
+		resp, err := sendTest(chatRequest{Model: model, Messages: baseMsg, ReasoningEffort: val})
+		if err == nil {
+			res.EffortOn = val
+			if len(resp.Choices) > 0 {
+				c := resp.Choices[0].Message
+				if c.ReasoningContent != "" || strings.Contains(c.Content, "<think>") || strings.Contains(c.Content, "<thought>") {
+					res.HasOutput = true
+				}
+			}
+			break
+		}
+	}
+
+	// 2. Тестируем effort для OFF в порядке: none, minimal, low
+	for _, val := range []string{"none", "minimal", "low"} {
+		_, err := sendTest(chatRequest{Model: model, Messages: baseMsg, ReasoningEffort: val})
+		if err == nil {
+			res.EffortOff = val
+			break
+		}
+	}
+
+	// 3. Если effort не поддержан, пробуем reasoning_budget / max_thinking_tokens
+	if res.EffortOn == "" && res.EffortOff == "" {
+		bOn := 1024
+		resp, err := sendTest(chatRequest{Model: model, Messages: baseMsg, ReasoningBudget: &bOn})
+		if err == nil {
+			res.UsesBudget = true
+			res.BudgetOn = 32768
+			res.BudgetOff = 0
+			if len(resp.Choices) > 0 {
+				c := resp.Choices[0].Message
+				if c.ReasoningContent != "" || strings.Contains(c.Content, "<think>") || strings.Contains(c.Content, "<thought>") {
+					res.HasOutput = true
+				}
+			}
+		} else {
+			resp, err := sendTest(chatRequest{Model: model, Messages: baseMsg, MaxThinkingTokens: &bOn})
+			if err == nil {
+				res.UsesBudget = true
+				res.BudgetOn = 32768
+				res.BudgetOff = 0
+				if len(resp.Choices) > 0 {
+					c := resp.Choices[0].Message
+					if c.ReasoningContent != "" || strings.Contains(c.Content, "<think>") || strings.Contains(c.Content, "<thought>") {
+						res.HasOutput = true
+					}
+				}
+			}
+		}
+	}
+
+	// 4. Проверяем без параметров, генерирует ли модель размышления сама по себе
+	if !res.HasOutput {
+		resp, err := sendTest(chatRequest{Model: model, Messages: baseMsg})
+		if err == nil && len(resp.Choices) > 0 {
+			c := resp.Choices[0].Message
+			if c.ReasoningContent != "" || strings.Contains(c.Content, "<think>") || strings.Contains(c.Content, "<thought>") {
+				res.HasOutput = true
+			}
+		}
+	}
+
+	return res, nil
 }

@@ -31,6 +31,7 @@ func cmdAsk(args []string) int {
 		rest        []string
 		literal     bool
 		yoloFlag    *bool
+		reasonFlag  *bool
 	)
 	for _, a := range args {
 		if literal {
@@ -57,9 +58,19 @@ func cmdAsk(args []string) int {
 		case a == "--yolo=off" || a == "--yolo=false":
 			v := false
 			yoloFlag = &v
+		case a == "--reasoning" || a == "--reasoning=on" || a == "--reasoning=true" || a == "--reasoning=1":
+			v := true
+			reasonFlag = &v
+		case a == "--reasoning=off" || a == "--reasoning=false" || a == "--reasoning=0":
+			v := false
+			reasonFlag = &v
 		default:
 			if strings.HasPrefix(a, "--yolo=") {
 				fail("неверное значение флага --yolo: %s (ожидается on или off)", a)
+				return exitConfig
+			}
+			if strings.HasPrefix(a, "--reasoning=") {
+				fail("неверное значение флага --reasoning: %s (ожидается on или off)", a)
 				return exitConfig
 			}
 			if strings.HasPrefix(a, "-") && len(a) > 1 {
@@ -90,6 +101,9 @@ func cmdAsk(args []string) int {
 	if err := profile.validate(); err != nil {
 		fail("%v", err)
 		return exitConfig
+	}
+	if reasonFlag != nil {
+		profile.Reasoning = reasonFlag
 	}
 	detail("профиль %s, модели: %s", profileName, strings.Join(profile.Models, " → "))
 

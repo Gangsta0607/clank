@@ -17,6 +17,7 @@ func usage() {
   clank -r <вопрос>                     продолжить сессию этого терминала (--resume)
   clank -c -r <вопрос>                  и пайп, и продолжение — работают вместе
   clank --yolo=on|off <вопрос>          задать YOLO режим на сессию (on — без подтверждения команд)
+  clank --reasoning=on|off <вопрос>     принудительно включить/выключить размышления модели
   clank -v <вопрос>                     подробный лог хода работы (-q — наоборот, молча)
   clank -- <вопрос>                     всё дальше — текст вопроса, даже если похоже на флаг
 
@@ -31,8 +32,9 @@ func usage() {
   clank config list                     список профилей
   clank config rm <имя>
   clank config show                     показать активный профиль
-  clank config set-url/set-key/set-model/set-proxy/set-tools/set-exec-timeout <значение>
+  clank config set-url/set-key/set-model/set-proxy/set-tools/set-reasoning/set-exec-timeout <значение>
   clank config test-tools               проверить поддержку tool calls моделью
+  clank config test-reasoning           проверить и откалибровать поддержку reasoning моделью
   clank config allow-rm/allow-clear     список команд, выполняемых без подтверждения
 
   clank session show                    транскрипт сессии этого терминала

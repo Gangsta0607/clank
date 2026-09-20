@@ -188,7 +188,9 @@ Auth errors (`errAuth`), context overflow (`errContextOverflow`), and bad reques
 
 ### Reasoning model support
 
-`chatComplete` checks if `content` is empty but `reasoning_content` is non-empty (DeepSeek-R1 and family) — falls back to `reasoning_content`. Also strips `<think>…</think>` blocks from content via `stripThinkBlocks`.
+Reasoning blocks (`<think>`, `<thought>`, `<reasoning>`, and `reasoning_content`) are stripped and never exposed to the user.
+Reasoning can be toggled via `clank config set-reasoning on|off` or `--reasoning=on|off`.
+`clank config test-reasoning` auto-detects and calibrates model parameters (`max` → `ultra` → `xhigh` → `high` for ON; `none` → `minimal` → `low` for OFF; or token budgets).
 
 ### Tool definition
 

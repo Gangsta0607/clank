@@ -114,6 +114,26 @@ func cmdConfig(args []string) int {
 		}
 		fmt.Println("proxy:     ", valueOr(p.Proxy, "<не задан, берётся из env>"))
 		fmt.Println("use_tools: ", p.UseTools)
+		if p.Reasoning != nil {
+			state := "выключен"
+			if *p.Reasoning {
+				state = "включён"
+			}
+			var details []string
+			if p.ReasoningEffort != "" {
+				details = append(details, "effort: "+p.ReasoningEffort)
+			}
+			if p.ReasoningBudget > 0 {
+				details = append(details, fmt.Sprintf("budget: %d", p.ReasoningBudget))
+			}
+			if len(details) > 0 {
+				fmt.Printf("мышление:   %s (%s)\n", state, strings.Join(details, ", "))
+			} else {
+				fmt.Println("мышление:  ", state)
+			}
+		} else {
+			fmt.Println("мышление:   <авто/по умолчанию провайдера>")
+		}
 		fmt.Println("таймаут:   ", p.execTimeout())
 		if cf.Yolo {
 			fmt.Println("yolo:       включён")
@@ -128,7 +148,7 @@ func cmdConfig(args []string) int {
 		}
 		return exitOK
 
-	case "set-url", "set-key", "set-model", "set-models", "set-proxy", "set-tools", "set-exec-timeout":
+	case "set-url", "set-key", "set-model", "set-models", "set-proxy", "set-tools", "set-reasoning", "set-exec-timeout":
 		if len(args) < 2 {
 			fail("нужно значение: clank config %s <значение>", args[0])
 			return exitConfig
@@ -165,6 +185,22 @@ func cmdConfig(args []string) int {
 			}
 		case "set-tools":
 			p.UseTools = val == "true" || val == "1" || val == "y" || val == "yes"
+		case "set-reasoning":
+			switch strings.ToLower(val) {
+			case "on", "1", "true", "yes", "вкл":
+				v := true
+				p.Reasoning = &v
+			case "off", "0", "false", "no", "выкл":
+				v := false
+				p.Reasoning = &v
+			case "-", "none", "auto", "default", "сброс":
+				p.Reasoning = nil
+				p.ReasoningEffort = ""
+				p.ReasoningBudget = 0
+			default:
+				fail("неверное значение: %s (ожидается on, off или -)", val)
+				return exitConfig
+			}
 		case "set-exec-timeout":
 			secs, err := strconv.Atoi(val)
 			if err != nil || secs < 0 {
@@ -188,6 +224,14 @@ func cmdConfig(args []string) int {
 			return exitConfig
 		}
 		return cmdTestTools(&cf, name)
+
+	case "test-reasoning":
+		name, _, err := activeProfile(&cf)
+		if err != nil {
+			fail("%v", err)
+			return exitConfig
+		}
+		return cmdTestReasoning(&cf, name)
 
 	case "allow-rm":
 		if len(args) < 2 {
@@ -470,6 +514,83 @@ func cmdTestTools(cf *ConfigFile, name string) int {
 	return exitOK
 }
 
+func cmdTestReasoning(cf *ConfigFile, name string) int {
+	p := cf.Profiles[name]
+	if err := p.validate(); err != nil {
+		fail("%v", err)
+		return exitConfig
+	}
+
+	model := p.Models[0]
+	fmt.Println("проверяю поддержку reasoning на модели", model, "...")
+	sp := startSpinner("тестирую параметры")
+	res, err := testReasoningSupport(p, model)
+	sp.stopSpinner()
+	if err != nil {
+		fail("%v", err)
+		return exitAPI
+	}
+
+	fmt.Println("\nрезультаты проверки:")
+	if res.EffortOn != "" || res.EffortOff != "" {
+		fmt.Printf("  управление reasoning_effort: поддерживается (включение: %s, выключение: %s)\n",
+			valueOr(res.EffortOn, "нет"), valueOr(res.EffortOff, "нет"))
+	} else if res.UsesBudget {
+		fmt.Println("  управление бюджетом токенов: поддерживается (reasoning_budget)")
+	} else {
+		fmt.Println("  параметры управления reasoning: не поддерживаются сервером")
+	}
+
+	if res.HasOutput {
+		fmt.Println("  генерация рассуждений (reasoning_content / <think>): ДА")
+	} else {
+		fmt.Println("  генерация рассуждений: не обнаружена (модель отвечает сразу)")
+	}
+
+	supported := res.EffortOn != "" || res.EffortOff != "" || res.UsesBudget || res.HasOutput
+	if !supported {
+		info("эта модель не использует и не настраивает reasoning")
+		return exitOK
+	}
+
+	if confirmYN(fmt.Sprintf("\nвключить reasoning для профиля %s? [Y/n]: ", name), true) {
+		v := true
+		p.Reasoning = &v
+		if res.EffortOn != "" {
+			p.ReasoningEffort = res.EffortOn
+		}
+		if res.UsesBudget {
+			p.ReasoningBudget = res.BudgetOn
+		}
+		cf.Profiles[name] = p
+		if err := saveConfigFile(*cf); err != nil {
+			fail("не смог сохранить: %v", err)
+			return exitConfig
+		}
+		fmt.Println("сохранено (reasoning: включён)")
+	} else {
+		if confirmYN("отключить reasoning принудительно? [y/N]: ", false) {
+			v := false
+			p.Reasoning = &v
+			if res.EffortOff != "" {
+				p.ReasoningEffort = res.EffortOff
+			}
+			if res.UsesBudget {
+				p.ReasoningBudget = res.BudgetOff
+			}
+			cf.Profiles[name] = p
+			if err := saveConfigFile(*cf); err != nil {
+				fail("не смог сохранить: %v", err)
+				return exitConfig
+			}
+			fmt.Println("сохранено (reasoning: выключен)")
+		} else {
+			fmt.Println("настройки не изменены")
+		}
+	}
+	return exitOK
+}
+
 func printConfigUsage() {
 	fmt.Fprintln(os.Stderr, `использование: clank config <команда>
   init                       быстрая настройка профиля "default"
@@ -483,8 +604,10 @@ func printConfigUsage() {
   set-model <a[,b,c]>        цепочка моделей: не ответила первая — идёт вторая
   set-proxy <url|->          '-' — сброс на env-прокси
   set-tools <true|false>     ручной оверрайд use_tools
+  set-reasoning <on|off|->   включить/выключить/сбросить мышление модели
   set-exec-timeout <сек>     потолок на выполнение команды (0 — дефолт)
   test-tools                 проверить и (с подтверждением) сохранить use_tools
+  test-reasoning             проверить и откалибровать поддержку reasoning
   allow-rm <команда>         убрать команду из разрешённых без подтверждения
   allow-clear                очистить список разрешённых команд`)
 }
