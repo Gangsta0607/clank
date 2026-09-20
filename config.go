@@ -59,6 +59,10 @@ type ConfigFile struct {
 	// Language — язык интерфейса: "ru", "en", пусто = автоопределение
 	// по LANG/LC_ALL/LC_MESSAGES. Меняется через `clank language`.
 	Language string `json:"language,omitempty"`
+	// Completions — куда мы сами ставили скрипты автодополнения
+	// (через `clank completion install` или предложение мастера).
+	// uninstall/nuke убирают перечисленное.
+	Completions []string `json:"completions,omitempty"`
 }
 
 // Путь фиксирован явно (не os.UserConfigDir()) — на macOS это дало бы
@@ -100,6 +104,7 @@ func (cf *ConfigFile) UnmarshalJSON(data []byte) error {
 		AllowedCommands json.RawMessage    `json:"allowed_commands"`
 		Yolo            bool               `json:"yolo"`
 		Language        string             `json:"language"`
+		Completions     []string           `json:"completions"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
@@ -108,6 +113,7 @@ func (cf *ConfigFile) UnmarshalJSON(data []byte) error {
 	cf.Profiles = raw.Profiles
 	cf.Yolo = raw.Yolo
 	cf.Language = raw.Language
+	cf.Completions = raw.Completions
 	cf.Allowed = make(map[string]TrustLevel)
 
 	if len(raw.AllowedCommands) > 0 {

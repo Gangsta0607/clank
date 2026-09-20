@@ -337,8 +337,19 @@ Settings and sessions stay.`,
 	HelpNuke: `clank nuke [-y] — remove both the binary and all data.
 Point of no return; asks for confirmation.`,
 	HelpUnknown: "no such help topic: %s",
-	HelpTopics: `topics: ask models config session yolo language update purge uninstall nuke
+	HelpTopics: `topics: ask models config session yolo language completion update purge uninstall nuke
 config and session have nested topics: e.g. clank help config test-model`,
+
+	CompletionUsage:     "usage: clank completion [zsh|bash|fish|install [shell]]",
+	CompletionBadShell:  "unknown shell: %s (supported: zsh, bash, fish)",
+	CompletionDone:      "completion installed: %s",
+	CompletionWriteFail: "could not write completion: %v",
+	CompletionZshHint:   "add to .zshrc if missing: fpath=(~/.zfunc $fpath)",
+	CompletionRemoved:   "completion removed: %s",
+	AskCompletion:       "install command completion for %s (%s)? [Y/n]: ",
+	HelpCompletion: `clank completion [zsh|bash|fish] — print the completion script.
+clank completion install — install it for the current shell.
+Install may also be offered automatically on the first config init.`,
 	Usage: `clank — a minimal CLI for OpenAI-compatible APIs
 
 usage:
@@ -375,6 +386,7 @@ usage:
   clank session list                    all sessions on the machine
 
   clank language [en|ru|auto]           interface language (no args — show)
+  clank completion [shell|install]      completion script or its install
   clank yolo [on|off]                   global YOLO mode on/off (no command confirmations)
   clank update [-y]                     check for and install a new version from GitHub
   clank purge [-y]                      wipe all user data (~/.config/clank/)

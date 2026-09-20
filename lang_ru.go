@@ -336,8 +336,19 @@ reasoning, vision) с общим итогом. Один вопрос — сох�
 	HelpNuke: `clank nuke [-y] — удалить и бинарник, и все данные.
 Точка невозврата; спросит подтверждение.`,
 	HelpUnknown: "нет такой справки: %s",
-	HelpTopics: `разделы: ask models config session yolo language update purge uninstall nuke
+	HelpTopics: `разделы: ask models config session yolo language completion update purge uninstall nuke
 у config и session есть вложенные: например clank help config test-model`,
+
+	CompletionUsage:     "использование: clank completion [zsh|bash|fish|install [шелл]]",
+	CompletionBadShell:  "неизвестный шелл: %s (умею: zsh, bash, fish)",
+	CompletionDone:      "автодополнение установлено: %s",
+	CompletionWriteFail: "не смог записать автодополнение: %v",
+	CompletionZshHint:   "добавь в .zshrc, если ещё нет: fpath=(~/.zfunc $fpath)",
+	CompletionRemoved:   "убрано автодополнение: %s",
+	AskCompletion:       "поставить автодополнение команд для %s (%s)? [Y/n]: ",
+	HelpCompletion: `clank completion [zsh|bash|fish] — напечатать скрипт автодополнения.
+clank completion install — поставить его для текущего шелла.
+Предложить установку могут и сами при первом config init.`,
 	Usage: `clank — минималистичный CLI к OpenAI-совместимому API
 
 использование:
@@ -374,6 +385,7 @@ reasoning, vision) с общим итогом. Один вопрос — сох�
   clank session list                    все сессии на машине
 
   clank language [en|ru|auto]           язык интерфейса (без аргумента — показать)
+  clank completion [шелл|install]        скрипт автодополнения или его установка
   clank yolo [on|off]                   включить/выключить глобальный режим YOLO (без подтверждения команд)
   clank update [-y]                     проверить и установить новую версию с GitHub
   clank purge [-y]                      стереть все пользовательские данные (~/.config/clank/)

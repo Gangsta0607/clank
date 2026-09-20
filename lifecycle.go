@@ -79,6 +79,10 @@ func cmdUninstall(args []string) int {
 		return exitOK
 	}
 
+	if cf, err := loadConfigFile(); err == nil {
+		removeCompletions(cf)
+	}
+
 	if err := removeBinary(execPath); err != nil {
 		fail(M.UninstFail, execPath, err, execPath)
 		return exitConfig
@@ -108,6 +112,10 @@ func cmdNuke(args []string) int {
 	if !autoYes && !confirmYN(prompt, false) {
 		fmt.Println(M.Aborted)
 		return exitOK
+	}
+
+	if cf, err := loadConfigFile(); err == nil {
+		removeCompletions(cf)
 	}
 
 	var errs []string

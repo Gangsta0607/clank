@@ -37,6 +37,8 @@ All code is in package `main` (single package, flat directory). No subdirectorie
 | `client.go`     | HTTP client, OpenAI-compatible API types, retry/fallback    |
 | `config.go`     | Config file load/save, profile management, allowed-commands |
 | `configcmd.go`  | `clank config *` and `clank models` subcommands             |
+| `completion.go` | `clank completion` scripts (zsh/bash/fish), install/remove |
+| `completion_test.go` | sync test: scripts cover all commands/flags            |
 | `lang.go`       | Language tables switch, locale detect, `clank language`     |
 | `lang_ru.go`    | Russian UI strings (`RU` table)                             |
 | `lang_en.go`    | English UI strings (`EN` table)                             |
@@ -65,6 +67,7 @@ os.Args[1] → switch:
   "config"  → cmdConfig(rest)
   "session" → cmdSession(rest)
   "yolo"    → cmdYolo(rest)
+  "completion" → cmdCompletion(rest)  // print script, install
   "language"→ cmdLanguage(rest)
   "update" / "purge" / "uninstall" / "nuke" → lifecycle
   "version" → print version
@@ -371,7 +374,12 @@ flags missing fields. Tool JSON schemas stay English (see above).
   otherwise `detectLang()` reads `LC_ALL` → `LC_MESSAGES` → `LANG`
   (first non-empty decides; `ru*` → RU, anything else incl. C/POSIX → EN).
 - `clank language [en|ru|auto]` shows or sets the override.
+- `clank help [cmd [sub]]` routes to per-topic help (nested supported).
 - `config show` prints the language line; `config test-vision` saves `Vision`.
+- `config test-model` runs tools+reasoning+vision probes with one save.
+- `clank completion install` records paths in `ConfigFile.Completions`;
+  `uninstall`/`nuke` remove them. Shell scripts are hand-written —
+  `completion_test.go` fails if a command/flag is missing from any script.
 
 ---
 

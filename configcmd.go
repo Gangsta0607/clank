@@ -302,7 +302,8 @@ func cmdConfigAdd(cf *ConfigFile, name string) int {
 	}
 
 	existing, exists := cf.Profiles[name]
-	if !exists {
+	isNew := !exists
+	if isNew {
 		existing.Created = time.Now().Format(time.RFC3339)
 	}
 
@@ -324,6 +325,10 @@ func cmdConfigAdd(cf *ConfigFile, name string) int {
 		return exitConfig
 	}
 	fmt.Println(M.ProfileSaved, name)
+
+	if isNew {
+		offerCompletion(cf)
+	}
 
 	if confirmYN(M.AskFetchModels, true) {
 		if code := selectModels(cf, name, ""); code != exitOK {

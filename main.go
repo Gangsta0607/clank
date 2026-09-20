@@ -34,6 +34,8 @@ func main() {
 		code = cmdSession(rest)
 	case "yolo":
 		code = cmdYolo(rest)
+	case "completion":
+		code = cmdCompletion(rest)
 	case "language":
 		code = cmdLanguage(rest)
 	case "update":

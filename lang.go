@@ -57,6 +57,15 @@ type Msgs struct {
 	HelpUnknown       string
 	HelpTopics        string
 
+	CompletionUsage     string
+	CompletionBadShell  string
+	CompletionDone      string
+	CompletionWriteFail string
+	CompletionZshHint   string
+	CompletionRemoved   string
+	AskCompletion       string
+	HelpCompletion      string
+
 	// ask.go
 	StdinReadFail  string
 	ImageFlagNeeds string
@@ -433,6 +442,7 @@ func cmdHelp(args []string) int {
 		"session list":            M.HelpSessionList,
 		"yolo":                    M.HelpYolo,
 		"language":                M.HelpLanguage,
+		"completion":              M.HelpCompletion,
 		"update":                  M.HelpUpdate,
 		"purge":                   M.HelpPurge,
 		"uninstall":               M.HelpUninstall,
